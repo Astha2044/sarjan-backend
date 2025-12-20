@@ -1,19 +1,33 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
+import swaggerUi from 'swagger-ui-express';
 import { notFound, errorHandler } from './middlewares/errorMiddleware.js';
 import userRoutes from './routes/userRoutes.js';
+import authRoutes from './routes/auth.routes.js';
+import chatRoutes from './routes/chat.routes.js';
+import swaggerSpecs from './config/swagger.js';
 
 const app = express();
 
 // Middleware
 app.use(express.json()); // Body parser
-app.use(cors()); // Enable CORS
+app.use(cookieParser()); // Cookie parser
+app.use(cors({
+    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    credentials: true,
+})); // Enable CORS with credentials
 app.use(helmet()); // Security headers
 if (process.env.NODE_ENV === 'development') {
     app.use(morgan('dev')); // Logger
 }
+app.set("trust proxy", 1);
+
+// Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
 
 // Routes
 app.get('/', (req, res) => {
@@ -81,6 +95,20 @@ app.get('/', (req, res) => {
                     margin-right: 0.5rem;
                     box-shadow: 0 0 12px #34d399;
                 }
+                .btn {
+                    display: inline-block;
+                    margin-top: 1rem;
+                    padding: 0.75rem 1.5rem;
+                    background: linear-gradient(to right, #60a5fa, #c084fc);
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 9999px;
+                    font-weight: 600;
+                    transition: opacity 0.2s;
+                }
+                .btn:hover {
+                    opacity: 0.9;
+                }
             </style>
         </head>
         <body>
@@ -91,16 +119,22 @@ app.get('/', (req, res) => {
                     <span class="dot"></span>
                     System Operational
                 </div>
+                <br>
+                <a href="/api-docs" class="btn">View API Docs</a>
             </div>
         </body>
         </html>
     `);
 });
 
+app.use('/api/chat', chatRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 
 // Error Handling Middleware
 app.use(notFound);
 app.use(errorHandler);
+
+
 
 export default app;
