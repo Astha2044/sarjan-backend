@@ -9,7 +9,8 @@
         "dev": "nodemon server.js",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
-        "format": "prettier --write ."
+        "format": "prettier --write .",
+        "test": "cross-env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js"
     },
     "keywords": [
         "nodejs",
@@ -38,10 +39,14 @@
         "swagger-ui-express": "^5.0.1"
     },
     "devDependencies": {
+        "cross-env": "^10.1.0",
         "eslint": "^9.39.2",
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-prettier": "^5.5.4",
+        "jest": "^30.2.0",
+        "mongodb-memory-server": "^10.4.2",
         "nodemon": "^3.0.2",
-        "prettier": "^3.7.4"
+        "prettier": "^3.7.4",
+        "supertest": "^7.1.4"
     }
 }
