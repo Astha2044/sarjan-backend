@@ -73,8 +73,8 @@ const chatValidation = [
 
     body('prompt')
         .trim()
-        .notEmpty()
-        .withMessage('Prompt is required'),
+        .optional(),
+    // .notEmpty() // Allow empty if file is attached (handled in controller)
 
     validateRequest
 ];

@@ -1,18 +1,10 @@
 import Message from '../models/Message.js';
 import ideaPipeline from './agent-fuction.js';
 
-const activeJobs = new Map();
+import fs from 'fs';
+import path from 'path';
 
-export const stopGeneration = (conversationId) => {
-    if (activeJobs.has(conversationId)) {
-        activeJobs.set(conversationId, false); // Set status to false to indicate stop
-        console.log(`Job for conversation ${conversationId} marked for stopping.`);
-        return true;
-    }
-    return false;
-};
-
-export const processAIResponse = async (conversationId, prompt, userId, io) => {
+export const processAIResponse = async (conversationId, prompt, userId, io, files = []) => {
     const roomId = `chat_${conversationId}`;
     activeJobs.set(conversationId, true); // Mark job as active
 
@@ -24,8 +16,20 @@ export const processAIResponse = async (conversationId, prompt, userId, io) => {
     };
 
     try {
-        // Call the AI pipeline with checkStop callback
-        const data = await ideaPipeline(prompt, io, roomId, checkStop);
+        // Prepare image parts for Gemini
+        const imageParts = files.map(file => {
+            const filePath = path.resolve(file.path);
+            const fileData = fs.readFileSync(filePath);
+            return {
+                inlineData: {
+                    data: fileData.toString('base64'),
+                    mimeType: file.mimetype
+                }
+            };
+        });
+
+        // Call the AI pipeline
+        const data = await ideaPipeline(prompt, io, roomId, imageParts);
         const aiResponseContent = data.finalOutput;
 
         // Save AI Message

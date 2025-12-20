@@ -2,6 +2,7 @@ import express from 'express';
 import { sendMessage, getHistory, getMessages } from '../controllers/chat.controller.js';
 import { protect } from '../middlewares/auth.middleware.js';
 import { chatValidation } from '../middlewares/validation.middleware.js';
+import upload from '../middlewares/upload.middleware.js';
 
 const router = express.Router();
 
@@ -56,12 +57,10 @@ const router = express.Router();
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required:
- *               - conversationId
- *               - prompt
  *               - prompt
  *             properties:
  *               conversationId:
@@ -70,6 +69,11 @@ const router = express.Router();
  *                 type: string
  *               prompt:
  *                 type: string
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
  *     responses:
  *       200:
  *         description: Message sent and response received
@@ -78,7 +82,7 @@ const router = express.Router();
  *             schema:
  *               $ref: '#/components/schemas/ChatResponse'
  */
-router.post('/message', protect, chatValidation, sendMessage);
+router.post('/message', protect, upload.array('files'), chatValidation, sendMessage);
 
 /**
  * @swagger
