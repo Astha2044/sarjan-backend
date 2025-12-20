@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import asyncHandler from '../utils/asyncHandler.js';
 import sendEmail from '../utils/email.service.js';
+import { getWelcomeEmailHtml } from '../utils/emailTemplates.js';
 
 // Generate Token
 const generateToken = (id) => {
@@ -67,7 +68,8 @@ const register = asyncHandler(async (req, res) => {
             await sendEmail({
                 email: user.email,
                 subject: 'Welcome to Sarjan!',
-                message: `Hi ${user.name},\n\nWelcome to Sarjan! We are excited to have you on board.\n\nBest,\nThe Sarjan Team`
+                message: `Hi ${user.name},\n\nWelcome to Sarjan! We are excited to have you on board.\n\nBest,\nThe Sarjan Team`,
+                html: getWelcomeEmailHtml(user.name)
             });
         } catch (error) {
             console.error('Error sending welcome email:', error);
