@@ -6,9 +6,15 @@ dotenv.config();
 
 connectDB();
 
+import http from 'http';
+import { initSocket } from './src/config/socket.js';
+
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+const httpServer = http.createServer(app);
+initSocket(httpServer);
+
+httpServer.listen(PORT, () => {
     console.log(`Server running in ${process.env.NODE_ENV} mode on http://localhost:${PORT}`);
 });
 
