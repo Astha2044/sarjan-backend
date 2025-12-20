@@ -1,3 +1,4 @@
+import { log } from 'console';
 import Message from '../models/Message.js';
 import ideaPipeline from './agent-fuction.js';
 import fs from 'fs';
@@ -13,8 +14,10 @@ export const stopGeneration = (conversationId) => {
     return false;
 };
 
-export const processAIResponse = async (conversationId, prompt, userId, io) => {
+export const processAIResponse = async (conversationId, prompt, userId, io, files) => {
     const roomId = `chat_${conversationId}`;
+    console.log(`Processing AI response for conversation ${conversationId}`);
+
     activeJobs.set(conversationId, true); // Mark job as active
 
     const checkStop = () => {
@@ -37,8 +40,17 @@ export const processAIResponse = async (conversationId, prompt, userId, io) => {
             };
         });
 
-        // Call the AI pipeline
-        const data = await ideaPipeline(prompt, io, roomId, imageParts, checkStop);
+        // Fetch Conversation History
+        const previousMessages = await Message.find({ conversationId })
+            .sort({ createdAt: 1 }) // Oldest first
+            .limit(10); // Context window
+
+        const historyContext = previousMessages.map(msg =>
+            `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
+        ).join('\n');
+
+        // Call the AI pipeline with history
+        const data = await ideaPipeline(prompt, io, roomId, imageParts, checkStop, historyContext);
         const aiResponseContent = data.finalOutput;
 
         // Save AI Message
@@ -47,6 +59,7 @@ export const processAIResponse = async (conversationId, prompt, userId, io) => {
             role: 'assistant',
             content: aiResponseContent
         });
+        log(`AI response saved for conversation ${aiMessage}`);
 
         io.to(roomId).emit('response_ready', {
             status: 'success',
