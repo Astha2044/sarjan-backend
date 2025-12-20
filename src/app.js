@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -130,5 +131,7 @@ app.use('/api/users', userRoutes);
 // Error Handling Middleware
 app.use(notFound);
 app.use(errorHandler);
+
+
 
 export default app;
