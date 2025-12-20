@@ -36,6 +36,9 @@ const sendMessage = asyncHandler(async (req, res) => {
     const { title, conversationId, prompt } = req.body;
     let conversation;
 
+    console.log('DEBUG: req.files:', req.files);
+    console.log('DEBUG: req.body:', req.body);
+
     // Handle Attachments
     const attachments = req.files ? req.files.map(file => ({
         url: file.path, // In real app, this would be an S3 URL

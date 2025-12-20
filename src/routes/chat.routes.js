@@ -57,12 +57,10 @@ const router = express.Router();
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required:
- *               - conversationId
- *               - prompt
  *               - prompt
  *             properties:
  *               conversationId:
@@ -71,6 +69,11 @@ const router = express.Router();
  *                 type: string
  *               prompt:
  *                 type: string
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
  *     responses:
  *       200:
  *         description: Message sent and response received
