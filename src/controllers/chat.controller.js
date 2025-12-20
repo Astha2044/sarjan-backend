@@ -36,6 +36,12 @@ const sendMessage = asyncHandler(async (req, res) => {
     const { title, conversationId, prompt } = req.body;
     let conversation;
 
+    // Handle Attachments
+    const attachments = req.files ? req.files.map(file => ({
+        url: file.path, // In real app, this would be an S3 URL
+        type: file.mimetype.startsWith('image/') ? 'image' : 'file'
+    })) : [];
+
     if (conversationId) {
         // 1. Verify conversation belongs to user
         conversation = await Conversation.findOne({
@@ -58,12 +64,13 @@ const sendMessage = asyncHandler(async (req, res) => {
     const userMessage = await Message.create({
         conversationId: conversation._id,
         role: 'user',
-        content: prompt
+        content: prompt || (attachments.length ? 'Sent an attachment' : ''),
+        attachments
     });
 
     // 3. Trigger Background Processing
     const io = getIO();
-    processAIResponse(conversation._id, prompt, req.user._id, io);
+    processAIResponse(conversation._id, prompt, req.user._id, io, req.files);
 
     // 4. Return Immediate Response
     res.status(202).json({

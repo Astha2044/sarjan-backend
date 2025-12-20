@@ -2,6 +2,7 @@ import express from 'express';
 import { sendMessage, getHistory, getMessages } from '../controllers/chat.controller.js';
 import { protect } from '../middlewares/auth.middleware.js';
 import { chatValidation } from '../middlewares/validation.middleware.js';
+import upload from '../middlewares/upload.middleware.js';
 
 const router = express.Router();
 
@@ -78,7 +79,7 @@ const router = express.Router();
  *             schema:
  *               $ref: '#/components/schemas/ChatResponse'
  */
-router.post('/message', protect, chatValidation, sendMessage);
+router.post('/message', protect, upload.array('files'), chatValidation, sendMessage);
 
 /**
  * @swagger

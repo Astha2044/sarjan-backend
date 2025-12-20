@@ -1,12 +1,27 @@
 import Message from '../models/Message.js';
 import ideaPipeline from './agent-fuction.js';
 
-export const processAIResponse = async (conversationId, prompt, userId, io) => {
+import fs from 'fs';
+import path from 'path';
+
+export const processAIResponse = async (conversationId, prompt, userId, io, files = []) => {
     const roomId = `chat_${conversationId}`;
 
     try {
+        // Prepare image parts for Gemini
+        const imageParts = files.map(file => {
+            const filePath = path.resolve(file.path);
+            const fileData = fs.readFileSync(filePath);
+            return {
+                inlineData: {
+                    data: fileData.toString('base64'),
+                    mimeType: file.mimetype
+                }
+            };
+        });
+
         // Call the AI pipeline
-        const data = await ideaPipeline(prompt, io, roomId);
+        const data = await ideaPipeline(prompt, io, roomId, imageParts);
         const aiResponseContent = data.finalOutput;
 
         // Save AI Message
