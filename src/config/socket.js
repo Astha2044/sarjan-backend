@@ -1,5 +1,7 @@
 import { Server } from 'socket.io';
 
+import { stopGeneration } from '../utils/background.processor.js';
+
 let io;
 
 export const initSocket = (httpServer) => {
@@ -16,6 +18,12 @@ export const initSocket = (httpServer) => {
         socket.on('join_room', (roomId) => {
             socket.join(roomId);
             console.log(`Socket ${socket.id} joined room ${roomId}`);
+        });
+
+        // Handle stop generation request
+        socket.on('stop_generation', ({ conversationId }) => {
+            console.log(`Stop request received for conversation ${conversationId}`);
+            stopGeneration(conversationId);
         });
 
         socket.on('disconnect', () => {
