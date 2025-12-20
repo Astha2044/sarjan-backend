@@ -1,49 +1,49 @@
 import express from 'express';
-import { createChat, sendMessage, getHistory, getMessages } from '../controllers/chat.controller.js';
+import { sendMessage, getHistory, getMessages } from '../controllers/chat.controller.js';
 import { protect } from '../middlewares/auth.middleware.js';
 import { chatValidation } from '../middlewares/validation.middleware.js';
 
 const router = express.Router();
 
-/**
- * @swagger
- * tags:
- *   name: Chat
- *   description: AI Chat management
- */
+// /**
+//  * @swagger
+//  * tags:
+//  *   name: Chat
+//  *   description: AI Chat management
+//  */
 
-/**
- * @swagger
- * /api/chat/new:
- *   post:
- *     summary: Create a new conversation
- *     tags: [Chat]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: false
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               title:
- *                 type: string
- *     responses:
- *       201:
- *         description: Conversation created
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status: { type: string, example: success }
- *                 data:
- *                   type: object
- *                   properties:
- *                     conversation: { $ref: '#/components/schemas/Conversation' }
- */
-router.post('/new', protect, createChat);
+// /**
+//  * @swagger
+//  * /api/chat/new:
+//  *   post:
+//  *     summary: Create a new conversation
+//  *     tags: [Chat]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     requestBody:
+//  *       required: false
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             properties:
+//  *               title:
+//  *                 type: string
+//  *     responses:
+//  *       201:
+//  *         description: Conversation created
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *               properties:
+//  *                 status: { type: string, example: success }
+//  *                 data:
+//  *                   type: object
+//  *                   properties:
+//  *                     conversation: { $ref: '#/components/schemas/Conversation' }
+//  */
+// router.post('/new', protect, createChat);
 
 /**
  * @swagger
@@ -62,8 +62,11 @@ router.post('/new', protect, createChat);
  *             required:
  *               - conversationId
  *               - prompt
+ *               - prompt
  *             properties:
  *               conversationId:
+ *                 type: string
+ *               title:
  *                 type: string
  *               prompt:
  *                 type: string
