@@ -2,6 +2,7 @@ import User from '../models/User.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import asyncHandler from '../utils/asyncHandler.js';
+import sendEmail from '../utils/email.service.js';
 
 // Generate Token
 const generateToken = (id) => {
@@ -61,6 +62,18 @@ const register = asyncHandler(async (req, res) => {
     });
 
     if (user) {
+        // Send Welcome Email
+        try {
+            await sendEmail({
+                email: user.email,
+                subject: 'Welcome to Sarjan!',
+                message: `Hi ${user.name},\n\nWelcome to Sarjan! We are excited to have you on board.\n\nBest,\nThe Sarjan Team`
+            });
+        } catch (error) {
+            console.error('Error sending welcome email:', error);
+            // We don't want to fail registration just because email failed
+        }
+
         sendTokenResponse(user, 201, res);
     } else {
         res.status(400);

@@ -10,7 +10,7 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 //     "gemini-1.5-flash-002", // Faster backup
 // ];
 const TEXT_MODELS = [
-    // "gemini-3-flash-preview",   // 1. Newest (Dec 2025) - Fast & Smart
+    "gemini-3-flash-preview",   // 1. Newest (Dec 2025) - Fast & Smart
     "gemini-2.5-flash-lite",    // 2. High Quota (1,500/day) - Best for free tier
     "gemini-2.5-flash",         // 3. Standard - Good quality, strict limits
     "gemini-2.0-flash-exp"      // 4. Old Faithful - Last resort backup
@@ -42,49 +42,66 @@ async function runAgent(prompt, imageParts = []) {
     throw new Error("❌ All AI text models failed.");
 }
 
-
-// --- 🎨 IMAGE GENERATION AGENT (Real Implementation) ---
-// This requires a paid/Pro Google AI Studio account.
-export async function generateImageAgent(prompt) {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-    // The specific model for generating images
-    const imagenModel = genAI.getGenerativeModel({ model: "imagen-3.0-generate-001" });
-
+// --- 🎨 GEMINI 3 PRO IMAGE AGENT ---
+export async function generateImageAgent(prompt, history = []) {
     try {
-        console.log(`🎨 Generating image with Imagen 3 for: "${prompt.substring(0, 30)}..."`);
+        console.log(`🎨 Visualizing with Gemini 3 Pro for: "${prompt.substring(0, 30)}..."`);
 
-        // Note: The method is generateImages, not generateContent
-        const result = await imagenModel.generateImages({
-            prompt: prompt,
-            numberOfImages: 1, // You can request up to 4
-            // aspectRatio: "16:9", // Optional: "1:1", "9:16", etc.
-            // safetySettings: [ ... ] // Optional
+        const apiKey = process.env.GEMINI_API_KEY;
+        const modelId = "gemini-2.5-flash-image";
+
+        // Use the v1beta endpoint which hosts the preview models
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
+
+        // Gemini 3 Pro supports "Thinking" for images to better understand layout/lighting
+        // We construct a multi-turn-like payload if history exists, or just a single prompt.
+        const contents = [
+            ...history,
+            { role: "user", parts: [{ text: prompt }] }
+        ];
+
+        const requestBody = {
+            contents: contents,
+            generationConfig: {
+                responseModalities: ["IMAGE"], // Force image output
+                // Gemini 3 specific parameters
+                temperature: 0.9,
+                candidateCount: 1
+            }
+        };
+
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(requestBody)
         });
 
-        // The API returns Base64 encoded image data
-        const image = result.response.images[0];
-
-        if (!image || !image.image64) {
-            throw new Error("No image data received from API.");
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Gemini 3 API Error ${response.status}: ${errorText}`);
         }
 
-        console.log("✅ Image generated successfully.");
+        const data = await response.json();
 
-        // Convert Base64 to a Data URL so it can be displayed immediately in frontend
-        // Alternatively, you could save this base64 string to a file on your server.
-        const base64DataUrl = `data:image/png;base64,${image.image64}`;
+        // Parse Gemini 3 Response
+        const candidate = data.candidates?.[0];
+        const parts = candidate?.content?.parts;
+        const imagePart = parts?.find(p => p.inlineData && p.inlineData.mimeType.startsWith('image'));
 
-        return base64DataUrl;
+        if (imagePart) {
+            console.log("✅ Image generated (Gemini 3 Pro).");
+            return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+        } else {
+            // Sometimes Gemini 3 will refuse and output text (safety refusal)
+            const textPart = parts?.find(p => p.text);
+            if (textPart) console.warn("⚠️ Model Refusal:", textPart.text);
+            throw new Error("Model returned text instead of an image.");
+        }
 
     } catch (error) {
-        console.error("❌ Imagen 3 Generation Failed:", error.message);
-
-        // Important: If your Pro account doesn't have access yet, 
-        // fall back to the placeholder so the app doesn't crash.
-        console.log("🔄 Returning fallback placeholder image.");
-        return `https://placehold.co/600x400?text=${encodeURIComponent("Image Gen Failed")}`;
+        console.error("❌ Gemini 3 Generation Failed:", error.message);
+        // Fallback to standard placeholder
+        return `https://placehold.co/800x450/2A2A2A/FFF?font=montserrat&text=${encodeURIComponent("Preview Model Unavailable")}`;
     }
 }
-
 export default runAgent;
