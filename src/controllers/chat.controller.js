@@ -33,57 +33,68 @@ import { getIO } from '../config/socket.js';
 // @route   POST /api/chat/message
 // @access  Private
 const sendMessage = asyncHandler(async (req, res) => {
-    const { title, conversationId, prompt } = req.body;
-    let conversation;
+    try {
 
-    console.log('DEBUG: req.files:', req.files);
-    console.log('DEBUG: req.body:', req.body);
 
-    // Handle Attachments
-    const attachments = req.files ? req.files.map(file => ({
-        url: file.path, // In real app, this would be an S3 URL
-        type: file.mimetype.startsWith('image/') ? 'image' : 'file'
-    })) : [];
+        const { title, conversationId, prompt } = req.body;
+        let conversation;
 
-    if (conversationId) {
-        // 1. Verify conversation belongs to user
-        conversation = await Conversation.findOne({
-            _id: conversationId,
-            userId: req.user._id
+        // console.log('DEBUG: req.files:', req.files);
+        console.log('DEBUG: req.body:', req.body);
+
+        // Handle Attachments
+        const attachments = req.files ? req.files.map(file => ({
+            url: file.path, // In real app, this would be an S3 URL
+            type: file.mimetype.startsWith('image/') ? 'image' : 'file'
+        })) : [];
+
+        if (conversationId) {
+            // 1. Verify conversation belongs to user
+            conversation = await Conversation.findOne({
+                _id: conversationId,
+                userId: req.user._id
+            });
+
+            if (!conversation) {
+                res.status(404);
+                throw new Error('Conversation not found');
+            }
+        } else {
+            conversation = await Conversation.create({
+                userId: req.user._id,
+                title: title || 'New Chat'
+            });
+        }
+
+        // 2. Save User Message
+        const userMessage = await Message.create({
+            conversationId: conversation._id,
+            role: 'user',
+            content: prompt || (attachments.length ? 'Sent an attachment' : ''),
+            attachments
         });
 
-        if (!conversation) {
-            res.status(404);
-            throw new Error('Conversation not found');
-        }
-    } else {
-        conversation = await Conversation.create({
-            userId: req.user._id,
-            title: title || 'New Chat'
+        // 3. Trigger Background Processing
+        const io = getIO();
+        processAIResponse(conversation._id, prompt, req.user._id, io, req.files);
+
+        // 4. Return Immediate Response
+        res.status(202).json({
+            status: 'accepted',
+            message: 'AI processing started',
+            data: {
+                conversationId: conversation._id,
+                userMessage
+            }
+        });
+    } catch (error) {
+
+        console.error('Error in sendMessage controller:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to send message'
         });
     }
-
-    // 2. Save User Message
-    const userMessage = await Message.create({
-        conversationId: conversation._id,
-        role: 'user',
-        content: prompt || (attachments.length ? 'Sent an attachment' : ''),
-        attachments
-    });
-
-    // 3. Trigger Background Processing
-    const io = getIO();
-    processAIResponse(conversation._id, prompt, req.user._id, io, req.files);
-
-    // 4. Return Immediate Response
-    res.status(202).json({
-        status: 'accepted',
-        message: 'AI processing started',
-        data: {
-            conversationId: conversation._id,
-            userMessage
-        }
-    });
 });
 
 // @desc    Get user chat history (list of conversations)

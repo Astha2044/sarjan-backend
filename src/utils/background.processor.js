@@ -1,11 +1,31 @@
+import { log } from 'console';
 import Message from '../models/Message.js';
 import ideaPipeline from './agent-fuction.js';
-
 import fs from 'fs';
 import path from 'path';
+const activeJobs = new Map();
 
-export const processAIResponse = async (conversationId, prompt, userId, io, files = []) => {
+export const stopGeneration = (conversationId) => {
+    if (activeJobs.has(conversationId)) {
+        activeJobs.set(conversationId, false); // Set status to false to indicate stop
+        console.log(`Job for conversation ${conversationId} marked for stopping.`);
+        return true;
+    }
+    return false;
+};
+
+export const processAIResponse = async (conversationId, prompt, userId, io, files) => {
     const roomId = `chat_${conversationId}`;
+    console.log(`Processing AI response for conversation ${conversationId}`);
+
+    activeJobs.set(conversationId, true); // Mark job as active
+
+    const checkStop = () => {
+        if (activeJobs.get(conversationId) === false) {
+            return true;
+        }
+        return false;
+    };
 
     try {
         // Prepare image parts for Gemini
@@ -20,8 +40,17 @@ export const processAIResponse = async (conversationId, prompt, userId, io, file
             };
         });
 
-        // Call the AI pipeline
-        const data = await ideaPipeline(prompt, io, roomId, imageParts);
+        // Fetch Conversation History
+        const previousMessages = await Message.find({ conversationId })
+            .sort({ createdAt: 1 }) // Oldest first
+            .limit(10); // Context window
+
+        const historyContext = previousMessages.map(msg =>
+            `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
+        ).join('\n');
+
+        // Call the AI pipeline with history
+        const data = await ideaPipeline(prompt, io, roomId, imageParts, checkStop, historyContext);
         const aiResponseContent = data.finalOutput;
 
         // Save AI Message
@@ -30,6 +59,7 @@ export const processAIResponse = async (conversationId, prompt, userId, io, file
             role: 'assistant',
             content: aiResponseContent
         });
+        log(`AI response saved for conversation ${aiMessage}`);
 
         io.to(roomId).emit('response_ready', {
             status: 'success',
@@ -39,17 +69,27 @@ export const processAIResponse = async (conversationId, prompt, userId, io, file
         });
 
     } catch (error) {
-        console.error('Error in background process:', error);
-        io.to(roomId).emit('processing_error', {
-            status: 'error',
-            message: 'Failed to process AI response'
-        });
+        if (error.message === 'STOPPED') {
+            console.log(`Generation stopped for conversation ${conversationId}`);
+            io.to(roomId).emit('generation_stopped', {
+                status: 'info',
+                message: 'Generation stopped by user'
+            });
+        } else {
+            console.error('Error in background process:', error);
+            io.to(roomId).emit('processing_error', {
+                status: 'error',
+                message: 'Failed to process AI response'
+            });
 
-        // Optionally save an error message to key the user know in history
-        await Message.create({
-            conversationId,
-            role: 'assistant',
-            content: 'Sorry, I encountered an error answering that.'
-        });
+            // Optionally save an error message to key the user know in history
+            await Message.create({
+                conversationId,
+                role: 'assistant',
+                content: 'Sorry, I encountered an error answering that.'
+            });
+        }
+    } finally {
+        activeJobs.delete(conversationId);
     }
 };

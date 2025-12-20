@@ -17,8 +17,12 @@ const messageSchema = mongoose.Schema({
         required: true
     },
     attachments: [{
-        url: String,
-        type: String // 'image' or 'file'
+        url: { type: String },
+        // ✅ CORRECT WAY: define 'type' as an object with a 'type' property
+        type: {
+            type: String,
+            default: 'image'
+        }
     }]
 }, {
     timestamps: true

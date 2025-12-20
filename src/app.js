@@ -24,6 +24,7 @@ app.use(helmet()); // Security headers
 if (process.env.NODE_ENV === 'development') {
     app.use(morgan('dev')); // Logger
 }
+app.set("trust proxy", 1);
 
 // Documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
