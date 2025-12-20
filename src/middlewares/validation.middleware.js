@@ -64,4 +64,19 @@ const loginValidation = [
     validateRequest
 ];
 
-export { registerValidation, loginValidation };
+
+const chatValidation = [
+    body('conversationId')
+        .optional()
+        .isMongoId()
+        .withMessage('Invalid conversation ID'),
+
+    body('prompt')
+        .trim()
+        .notEmpty()
+        .withMessage('Prompt is required'),
+
+    validateRequest
+];
+
+export { registerValidation, loginValidation, chatValidation };

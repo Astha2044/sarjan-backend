@@ -128,8 +128,6 @@ router.post('/logout', logout);
  *   get:
  *     summary: Verify current user token
  *     tags: [Auth]
- *     security:
- *       - cookieAuth: []
  *     responses:
  *       200:
  *         description: Token is valid
