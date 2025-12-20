@@ -3,9 +3,11 @@ import runAgent, { generateImageAgent } from './gemini-client.js';
 // Delay helper
 const breathe = () => new Promise(r => setTimeout(r, 2000)); // Increased to 2s for safety
 
-async function ideaPipeline(userPrompt, io, roomId, imageParts = []) {
+async function ideaPipeline(userPrompt, io, roomId, imageParts = [], checkStop) {
     console.log("🚀 Starting Idea Pipeline with Gemini 2.5 Flash...");
     if (io && roomId) io.to(roomId).emit('pipeline_start', { message: 'Starting process...' });
+    if (checkStop && checkStop()) throw new Error('STOPPED');
+
 
     // Check for Image Generation Intent
     const imageKeywords = ['generate image', 'create image', 'draw', 'imagine'];

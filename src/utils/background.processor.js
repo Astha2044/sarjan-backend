@@ -1,10 +1,19 @@
 import Message from '../models/Message.js';
 import ideaPipeline from './agent-fuction.js';
-
 import fs from 'fs';
 import path from 'path';
+const activeJobs = new Map();
 
-export const processAIResponse = async (conversationId, prompt, userId, io, files = []) => {
+export const stopGeneration = (conversationId) => {
+    if (activeJobs.has(conversationId)) {
+        activeJobs.set(conversationId, false); // Set status to false to indicate stop
+        console.log(`Job for conversation ${conversationId} marked for stopping.`);
+        return true;
+    }
+    return false;
+};
+
+export const processAIResponse = async (conversationId, prompt, userId, io) => {
     const roomId = `chat_${conversationId}`;
     activeJobs.set(conversationId, true); // Mark job as active
 
@@ -29,7 +38,7 @@ export const processAIResponse = async (conversationId, prompt, userId, io, file
         });
 
         // Call the AI pipeline
-        const data = await ideaPipeline(prompt, io, roomId, imageParts);
+        const data = await ideaPipeline(prompt, io, roomId, imageParts, checkStop);
         const aiResponseContent = data.finalOutput;
 
         // Save AI Message
