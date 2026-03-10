@@ -36,8 +36,8 @@ const registerValidation = [
 
     body('password')
         .trim()
-        .isLength({ min: 10 })
-        .withMessage('Password must be at least 10 characters long')
+        .isLength({ min: 6 })
+        .withMessage('Password must be at least 6 characters long')
         .matches(/[A-Z]/)
         .withMessage('Password must contain at least one uppercase letter')
         .matches(/[a-z]/)

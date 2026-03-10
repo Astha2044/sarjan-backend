@@ -21,16 +21,16 @@ async function runAgent(prompt, imageParts = []) {
 
     for (const modelName of TEXT_MODELS) {
         try {
-            console.log(`🤖 Attempting text with model: ${modelName}...`);
+            console.log(` Attempting text with model: ${modelName}...`);
             const model = genAI.getGenerativeModel({ model: modelName });
             const input = imageParts.length > 0 ? [prompt, ...imageParts] : [prompt];
 
             const result = await model.generateContent(input);
-            console.log(`✅ Success with ${modelName}`);
+            console.log(` Success with ${modelName}`);
             return result.response.text();
 
         } catch (error) {
-            console.warn(`⚠️ Failed with ${modelName}: ${error.message}`);
+            console.warn(` Failed with ${modelName}: ${error.message}`);
             if (error.status === 429) {
                 await delay(2000);
                 continue;
@@ -39,13 +39,13 @@ async function runAgent(prompt, imageParts = []) {
             if (error.status === 404 || error.status === 403) continue;
         }
     }
-    throw new Error("❌ All AI text models failed.");
+    throw new Error(" All AI text models failed.");
 }
 
-// --- 🎨 GEMINI 3 PRO IMAGE AGENT ---
+// ---  GEMINI 3 PRO IMAGE AGENT ---
 export async function generateImageAgent(prompt, history = []) {
     try {
-        console.log(`🎨 Visualizing with Gemini 3 Pro for: "${prompt.substring(0, 30)}..."`);
+        console.log(` Visualizing with Gemini 3 Pro for: "${prompt.substring(0, 30)}..."`);
 
         const apiKey = process.env.GEMINI_API_KEY;
         const modelId = "gemini-2.5-flash-image";
@@ -89,17 +89,17 @@ export async function generateImageAgent(prompt, history = []) {
         const imagePart = parts?.find(p => p.inlineData && p.inlineData.mimeType.startsWith('image'));
 
         if (imagePart) {
-            console.log("✅ Image generated (Gemini 3 Pro).");
+            console.log(" Image generated (Gemini 3 Pro).");
             return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
         } else {
             // Sometimes Gemini 3 will refuse and output text (safety refusal)
             const textPart = parts?.find(p => p.text);
-            if (textPart) console.warn("⚠️ Model Refusal:", textPart.text);
+            if (textPart) console.warn(" Model Refusal:", textPart.text);
             throw new Error("Model returned text instead of an image.");
         }
 
     } catch (error) {
-        console.error("❌ Gemini 3 Generation Failed:", error.message);
+        console.error("Gemini 3 Generation Failed:", error.message);
         // Fallback to standard placeholder
         return `https://placehold.co/800x450/2A2A2A/FFF?font=montserrat&text=${encodeURIComponent("Preview Model Unavailable")}`;
     }
