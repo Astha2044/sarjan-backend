@@ -42,66 +42,95 @@ async function runAgent(prompt, imageParts = []) {
     throw new Error(" All AI text models failed.");
 }
 
-// ---  GEMINI 3 PRO IMAGE AGENT ---
+// ---  DEAPI IMAGE AGENT (Flux Model) ---
 export async function generateImageAgent(prompt, history = []) {
     try {
-        console.log(` Visualizing with Gemini 3 Pro for: "${prompt.substring(0, 30)}..."`);
+        console.log(` Visualizing with DeAPI for: "${prompt.substring(0, 30)}..."`);
 
-        const apiKey = process.env.GEMINI_API_KEY;
-        const modelId = "gemini-2.5-flash-image";
-
-        // Use the v1beta endpoint which hosts the preview models
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
-
-        // Gemini 3 Pro supports "Thinking" for images to better understand layout/lighting
-        // We construct a multi-turn-like payload if history exists, or just a single prompt.
-        const contents = [
-            ...history,
-            { role: "user", parts: [{ text: prompt }] }
-        ];
+        const apiKey = process.env.DEAPI_API_KEY;
+        const submitUrl = 'https://api.deapi.ai/api/v1/client/txt2img';
 
         const requestBody = {
-            contents: contents,
-            generationConfig: {
-                responseModalities: ["IMAGE"], // Force image output
-                // Gemini 3 specific parameters
-                temperature: 0.9,
-                candidateCount: 1
-            }
+            prompt: prompt,
+            model: "Flux_2_Klein_4B_BF16",
+            width: 1024,
+            height: 1024,
+            seed: Math.floor(Math.random() * 2000000000),
+            steps: 4
         };
 
-        const response = await fetch(url, {
+        const submitResponse = await fetch(submitUrl, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${apiKey}`,
+                "accept": "application/json"
+            },
             body: JSON.stringify(requestBody)
         });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Gemini 3 API Error ${response.status}: ${errorText}`);
+        if (!submitResponse.ok) {
+            const errorText = await submitResponse.text();
+            throw new Error(`DeAPI Submit Error ${submitResponse.status}: ${errorText}`);
         }
 
-        const data = await response.json();
+        const submitData = await submitResponse.json();
+        const requestId = submitData.data?.request_id || submitData.request_id;
 
-        // Parse Gemini 3 Response
-        const candidate = data.candidates?.[0];
-        const parts = candidate?.content?.parts;
-        const imagePart = parts?.find(p => p.inlineData && p.inlineData.mimeType.startsWith('image'));
-
-        if (imagePart) {
-            console.log(" Image generated (Gemini 3 Pro).");
-            return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
-        } else {
-            // Sometimes Gemini 3 will refuse and output text (safety refusal)
-            const textPart = parts?.find(p => p.text);
-            if (textPart) console.warn(" Model Refusal:", textPart.text);
-            throw new Error("Model returned text instead of an image.");
+        if (!requestId) {
+            throw new Error(`No request_id returned from DeAPI. Response: ${JSON.stringify(submitData)}`);
         }
+
+        console.log(` Job submitted. ID: ${requestId}`);
+
+        // Polling loop
+        const statusUrl = `https://api.deapi.ai/api/v1/client/request-status/${requestId}`;
+        let attempts = 0;
+        const maxAttempts = 30; // 30 * 2s = 60s
+
+        while (attempts < maxAttempts) {
+            attempts++;
+            await delay(2000);
+
+            const statusResponse = await fetch(statusUrl, {
+                headers: {
+                    "Authorization": `Bearer ${apiKey}`,
+                    "accept": "application/json"
+                }
+            });
+
+            if (!statusResponse.ok) {
+                console.warn(` Polling error ${statusResponse.status}. Retrying...`);
+                continue;
+            }
+
+            const rawStatusData = await statusResponse.json();
+            const statusData = rawStatusData.data || rawStatusData;
+            const status = statusData.status?.toLowerCase() || statusData.state?.toLowerCase();
+
+            if (status === 'done' || status === 'completed' || status === 'success') {
+                const imageUrl = statusData.result_url || (statusData.results_alt_formats && statusData.results_alt_formats[0]?.url);
+                if (imageUrl) {
+                    console.log(" Image generated (DeAPI).");
+                    return imageUrl;
+                }
+                throw new Error("Job completed but no image URL found in response.");
+            }
+
+            if (status === 'error' || status === 'failed') {
+                throw new Error(`DeAPI Job Failed: ${statusData.message || 'Unknown error'}`);
+            }
+
+            console.log(` Polling... status: ${status} (attempt ${attempts})`);
+        }
+
+        throw new Error("DeAPI job timed out after 60 seconds.");
 
     } catch (error) {
-        console.error("Gemini 3 Generation Failed:", error.message);
-        // Fallback to standard placeholder
-        return `https://placehold.co/800x450/2A2A2A/FFF?font=montserrat&text=${encodeURIComponent("Preview Model Unavailable")}`;
+        console.error("Image Generation Failed:", error.message);
+        // Fallback to standard placeholder with actual error for debugging
+        const shortError = error.message.split('\n')[0].substring(0, 100);
+        return `https://placehold.co/800x450/2A2A2A/FFF?font=montserrat&text=${encodeURIComponent("Error: " + shortError)}`;
     }
 }
 export default runAgent;

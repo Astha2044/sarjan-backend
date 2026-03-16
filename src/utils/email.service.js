@@ -17,11 +17,12 @@ const sendEmail = async (options) => {
 
     // 2) Define the email options
     const mailOptions = {
-        from: 'Sarjan Backend <noreply@sarjan.com>',
+        from: 'Sarjan AI <noreply@sarjan.com>',
         to: options.email,
         subject: options.subject,
         text: options.message,
-        html: options.html
+        html: options.html,
+        attachments: options.attachments || []
     };
 
     // 3) Actually send the email

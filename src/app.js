@@ -9,6 +9,7 @@ import { notFound, errorHandler } from './middlewares/errorMiddleware.js';
 import userRoutes from './routes/userRoutes.js';
 import authRoutes from './routes/auth.routes.js';
 import chatRoutes from './routes/chat.routes.js';
+import planRoutes from './routes/plan.js';
 import swaggerSpecs from './config/swagger.js';
 
 const app = express();
@@ -130,6 +131,7 @@ app.get('/', (req, res) => {
 app.use('/api/chat', chatRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/plan', planRoutes);
 
 // Error Handling Middleware
 app.use(notFound);

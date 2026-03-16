@@ -158,3 +158,26 @@ export const getWelcomeEmailHtml = (name) => {
     `;
     return getGenericEmailHtml('Welcome to Sarjan', content);
 };
+
+export const getProUpgradeEmailHtml = (name) => {
+    const content = `
+        <h1 style="color: #0f172a; margin-top: 0;">You're now Pro!</h1>
+        <p>Hi <strong>${name}</strong>,</p>
+        <p>Congratulations! You have successfully upgraded to the <strong>Sarjan AI Pro Plan</strong>.</p>
+        <p>You now have unlimited access to all our premium features, including:</p>
+        <ul>
+            <li>Unlimited message generation</li>
+            <li>High-quality Flux image generation</li>
+            <li>Priority support and faster responses</li>
+        </ul>
+        <p>We've attached your invoice to this email for your records.</p>
+        
+        <div class="button-container">
+            <a href="#" class="button">Go to Studio</a>
+        </div>
+        
+        <p>Thank you for supporting us. Let's create something amazing!</p>
+        <p>Best regards,<br>The Sarjan Team</p>
+    `;
+    return getGenericEmailHtml('Sarjan AI - Pro Upgrade Confirmed', content);
+};

@@ -3,7 +3,7 @@ import { sendMessage, getHistory, getMessages } from '../controllers/chat.contro
 import { protect } from '../middlewares/auth.middleware.js';
 import { chatValidation } from '../middlewares/validation.middleware.js';
 import upload from '../middlewares/upload.middleware.js';
-
+import { checkPlanLimit, checkImageAccess } from '../middlewares/planeCheck.js';
 const router = express.Router();
 
 // /**
@@ -82,8 +82,15 @@ const router = express.Router();
  *             schema:
  *               $ref: '#/components/schemas/ChatResponse'
  */
-router.post('/message', protect, upload.array('files'), chatValidation, sendMessage);
-
+router.post(
+    '/message',
+    protect,
+    upload.array('files'),
+    chatValidation,
+    checkPlanLimit,
+    checkImageAccess,
+    sendMessage,
+);
 /**
  * @swagger
  * /api/chat/history:
@@ -105,7 +112,7 @@ router.post('/message', protect, upload.array('files'), chatValidation, sendMess
  *                 data:
  *                   type: object
  *                   properties:
- *                     conversations: 
+ *                     conversations:
  *                       type: array
  *                       items: { $ref: '#/components/schemas/Conversation' }
  */

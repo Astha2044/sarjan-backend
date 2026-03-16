@@ -33,7 +33,9 @@ const sendTokenResponse = (user, statusCode, res) => {
             _id: user._id,
             name: user.name,
             email: user.email,
-            token: token // Sending token in response for flexibility
+            token: token, // Sending token in response for flexibility
+            plan: user.plan,
+            messageCount: user.messageCount
         }
     });
 };
@@ -123,6 +125,8 @@ const verifyToken = (req, res) => {
             _id: req.user._id,
             name: req.user.name,
             email: req.user.email,
+            plan: req.user.plan,
+            messageCount: req.user.messageCount
         }
     });
 };

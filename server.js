@@ -1,7 +1,6 @@
 import dotenv from 'dotenv';
 import connectDB from './src/config/db.js';
 import app from './src/app.js';
-
 dotenv.config();
 
 connectDB();
@@ -24,4 +23,3 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 }
 
 export default app;
-

@@ -9,8 +9,9 @@ async function ideaPipeline(userPrompt, io, roomId, imageParts = [], checkStop, 
     if (checkStop && checkStop()) throw new Error('STOPPED');
 
     // 1. Check for Image Generation Intent
-    const imageKeywords = ['generate image', 'create image', 'draw', 'imagine', 'picture of'];
-    const isImageRequest = imageKeywords.some(keyword => userPrompt.toLowerCase().includes(keyword));
+    // Use regex to allow words between generate/create and image/picture (e.g. "generate a peacock image")
+    const imageRegex = /(generate|create|make).*(image|picture|photo|art)|draw|imagine|picture of/i;
+    const isImageRequest = imageRegex.test(userPrompt);
 
     if (isImageRequest) {
         console.log("🎨 Image Flow Detected: Switching agents to Visual Mode");
