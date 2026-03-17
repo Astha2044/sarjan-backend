@@ -1,5 +1,6 @@
 import { log } from 'console';
 import Message from '../models/Message.js';
+import User from '../models/User.js';
 import ideaPipeline from './agent-fuction.js';
 import fs from 'fs';
 import path from 'path';
@@ -40,17 +41,20 @@ export const processAIResponse = async (conversationId, prompt, userId, io, file
             };
         });
 
-        // Fetch Conversation History
-        const previousMessages = await Message.find({ conversationId })
-            .sort({ createdAt: 1 }) // Oldest first
-            .limit(10); // Context window
+        // Fetch Conversation History & User Plan
+        const [previousMessages, user] = await Promise.all([
+            Message.find({ conversationId })
+                .sort({ createdAt: 1 })
+                .limit(10),
+            User.findById(userId).select('plan')
+        ]);
 
         const historyContext = previousMessages.map(msg =>
             `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
         ).join('\n');
 
-        // Call the AI pipeline with history
-        const data = await ideaPipeline(prompt, io, roomId, imageParts, checkStop, historyContext);
+        // Call the AI pipeline with history and user plan
+        const data = await ideaPipeline(prompt, io, roomId, imageParts, checkStop, historyContext, user?.plan || 'free');
         const aiResponseContent = data.finalOutput;
 
         // Save AI Message

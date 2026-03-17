@@ -3,17 +3,27 @@ import runAgent, { generateImageAgent } from './gemini-client.js';
 // Delay helper
 const breathe = () => new Promise(r => setTimeout(r, 2000));
 
-async function ideaPipeline(userPrompt, io, roomId, imageParts = [], checkStop, historyContext = '') {
+async function ideaPipeline(userPrompt, io, roomId, imageParts = [], checkStop, historyContext = '', userPlan = 'free') {
     console.log("🚀 Starting Multi-Agent Creative Studio with Gemini...");
     if (io && roomId) io.to(roomId).emit('pipeline_start', { message: 'Inking the canvas...' });
     if (checkStop && checkStop()) throw new Error('STOPPED');
 
     // 1. Check for Image Generation Intent
-    // Use regex to allow words between generate/create and image/picture (e.g. "generate a peacock image")
     const imageRegex = /(generate|create|make).*(image|picture|photo|art)|draw|imagine|picture of/i;
-    const isImageRequest = imageRegex.test(userPrompt);
+    const isImageRequest = imageRegex.test(userPrompt) || imageParts.length > 0;
 
     if (isImageRequest) {
+        if (userPlan !== 'pro') {
+            const restrictionMsg = "image_generation_restricted";
+            if (io && roomId) io.to(roomId).emit('pipeline_step', { 
+                step: 'restriction', 
+                content: "🎨 Image generation is a Pro feature. Please upgrade to unleash your full creativity!" 
+            });
+            return { 
+                finalOutput: "🎨 **Image generation is a Pro feature.** Please upgrade to Pro to generate images with AI.",
+                restricted: true 
+            };
+        }
         console.log("🎨 Image Flow Detected: Switching agents to Visual Mode");
     }
 

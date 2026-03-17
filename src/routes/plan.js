@@ -5,52 +5,110 @@ import PDFDocument from 'pdfkit';
 import sendEmail from "../utils/email.service.js";
 import { getProUpgradeEmailHtml } from "../utils/emailTemplates.js";
 import { Buffer } from 'buffer';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
 // Helper to generate Invoice PDF
 const generateInvoicePDF = (user, doc) => {
-  // Header - Premium Look
-  doc.fillColor('#0f172a').fontSize(25).text('SARJAN AI', 50, 50);
-  doc.fontSize(10).fillColor('#64748b').text('Intelligent Design Systems', 50, 80);
-  doc.moveDown();
+  const logoPath = path.join(__dirname, '..', 'assets', 'logo.png');
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const monthYear = now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const invoiceNo = `INV-${Date.now().toString().slice(-6)}`;
 
-  // Invoice Info
-  doc.fillColor('#000').fontSize(20).text('INVOICE', { align: 'right' });
-  doc.fontSize(10).text(`Invoice Date: ${new Date().toLocaleDateString()}`, { align: 'right' });
-  doc.text(`Invoice #: INV-${Date.now().toString().slice(-6)}`, { align: 'right' });
+  // Header Section - Clean & Minimalist (Text-based Logo)
+  const headerY = 40;
+  const logoText1 = 'SARJAN ';
+  const logoText2 = ' Ai'; // Reduced space for normal appearance
+  
+  doc.fontSize(22).font('Helvetica-Bold');
+  const totalLogoWidth = doc.widthOfString(logoText1) + doc.widthOfString(logoText2);
+  const logoX = (doc.page.width - totalLogoWidth) / 2;
+
+  // Render "SARJAN" in Black
+  doc.fillColor('#1a1a1a')
+     .text(logoText1, logoX, headerY, { continued: true });
+  
+  // Render "Ai" in Teal
+  doc.fillColor('#00d1b2')
+     .text(logoText2);
+
+  // Subtitle / Info - Perfectly centered across the page
+  doc.fontSize(9)
+     .font('Helvetica')
+     .fillColor('#666')
+     .text('Intelligent Design Systems', 0, doc.y + 5, { align: 'center', width: doc.page.width });
+
+  doc.moveDown(2.5);
+
+  // Bill To and Invoice on Same Line
+  const startY = doc.y;
+  doc.fillColor('#1a1a1a').font('Helvetica-Bold').fontSize(11);
+  doc.text('BILL TO', 50, startY);
+  doc.text('INVOICE', 0, startY, { align: 'right' });
+
+  doc.font('Helvetica').fontSize(10).fillColor('#333');
+  doc.text(user.name || 'Valued Customer', 50, startY + 14);
+  doc.text(user.email, 50, startY + 26);
+
+  doc.text(`Invoice No: ${invoiceNo}`, 0, startY + 14, { align: 'right' });
+  doc.text(`Date: ${dateStr}`, 0, startY + 26, { align: 'right' });
+
   doc.moveDown(2);
 
-  // Bill To
-  doc.fontSize(12).fillColor('#0f172a').text('BILL TO:', 50, 150);
-  doc.fontSize(10).fillColor('#000').text(user.name || 'Valued Customer', 50, 170);
-  doc.text(user.email, 50, 185);
-  doc.moveDown(2);
+  // Table Structure
+  const tableTop = doc.y + 10;
+  doc.rect(50, tableTop, 500, 18).fill('#333');
 
-  // Table Header
-  const tableTop = 250;
-  doc.rect(50, tableTop, 500, 25).fill('#f8fafc');
-  doc.fillColor('#475569').fontSize(10).text('DESCRIPTION', 60, tableTop + 7);
-  doc.text('PLAN', 250, tableTop + 7);
-  doc.text('AMOUNT', 480, tableTop + 7);
+  doc.fillColor('#fff').font('Helvetica-Bold').fontSize(9);
+  doc.text('DESCRIPTION', 60, tableTop + 4);
+  doc.text('QTY', 350, tableTop + 4);
+  doc.text('PRICE', 420, tableTop + 4);
+  doc.text('TOTAL', 500, tableTop + 4);
 
   // Table Content
-  doc.fillColor('#000').text('Sarjan AI Pro Subscription', 60, tableTop + 40);
-  doc.text('Monthly', 250, tableTop + 40);
-  doc.text('Rs. 0.00', 480, tableTop + 40);
+  doc.fillColor('#333').font('Helvetica').fontSize(9);
+  const itemY = tableTop + 25;
+  doc.text(`Sarjan AI Pro Subscription - ${monthYear}`, 60, itemY);
+  doc.text('1', 350, itemY);
+  doc.text('Rs. 0.00', 420, itemY);
+  doc.text('Rs. 0.00', 500, itemY);
 
-  // Horizontal Line
-  doc.moveTo(50, tableTop + 60).lineTo(550, tableTop + 60).stroke('#e2e8f0');
+  doc.moveTo(50, itemY + 18).lineTo(550, itemY + 18).stroke('#eee');
 
-  // Total
-  doc.fontSize(12).text('TOTAL:', 400, tableTop + 80);
-  doc.fontSize(15).fillColor('#a855f7').text('Rs. 0.00', 480, tableTop + 78);
+  // Totals Section
+  const totalY = itemY + 35;
+  doc.font('Helvetica-Bold').text('SUBTOTAL', 380, totalY);
+  doc.font('Helvetica').text('Rs. 0.00', 500, totalY);
 
-  // Footer
-  doc.fontSize(10).fillColor('#94a3b8').text(
-    'Thank you for being a Pro member of Sarjan AI! Your support helps us build the future.',
-    50, 700, { align: 'center', width: 500 }
+  doc.font('Helvetica-Bold').text('GST (0%)', 380, totalY + 13);
+  doc.font('Helvetica').text('Rs. 0.00', 500, totalY + 13);
+
+  doc.rect(370, totalY + 28, 180, 22).fill('#f9f9f9');
+  doc.fillColor('#1a1a1a').font('Helvetica-Bold').fontSize(11).text('TOTAL', 380, totalY + 34);
+  doc.text('Rs. 0.00', 500, totalY + 34);
+
+  // Footer - Centered Layout
+  const footerY = 700;
+  doc.moveTo(50, footerY).lineTo(550, footerY).stroke('#eee');
+
+  // Website Link - Centered
+  doc.fontSize(9).fillColor('#4f46e5').font('Helvetica').text(
+    'www.sarjanai.com',
+    0, footerY + 12, { align: 'center', link: 'https://sarjanai.com' }
   );
+
+  // Legal Links - Centered below
+  doc.fontSize(8.5).fillColor('#777').text(
+    'Terms & Conditions',
+    0, footerY + 26, { align: 'center', continued: true, link: 'https://sarjanai.com/terms' }
+  ).text('  |  ', { continued: true, link: null })
+   .text('Privacy Policy', { link: 'https://sarjanai.com/privacy' });
 };
 
 // Change plan (free or pro)
