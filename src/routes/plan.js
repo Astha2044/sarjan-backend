@@ -25,24 +25,24 @@ const generateInvoicePDF = (user, doc) => {
   const headerY = 40;
   const logoText1 = 'SARJAN ';
   const logoText2 = ' Ai'; // Reduced space for normal appearance
-  
+
   doc.fontSize(22).font('Helvetica-Bold');
   const totalLogoWidth = doc.widthOfString(logoText1) + doc.widthOfString(logoText2);
   const logoX = (doc.page.width - totalLogoWidth) / 2;
 
   // Render "SARJAN" in Black
   doc.fillColor('#1a1a1a')
-     .text(logoText1, logoX, headerY, { continued: true });
-  
+    .text(logoText1, logoX, headerY, { continued: true });
+
   // Render "Ai" in Teal
   doc.fillColor('#00d1b2')
-     .text(logoText2);
+    .text(logoText2);
 
   // Subtitle / Info - Perfectly centered across the page
   doc.fontSize(9)
-     .font('Helvetica')
-     .fillColor('#666')
-     .text('Intelligent Design Systems', 0, doc.y + 5, { align: 'center', width: doc.page.width });
+    .font('Helvetica')
+    .fillColor('#666')
+    .text('Intelligent Design Systems', 0, doc.y + 5, { align: 'center', width: doc.page.width });
 
   doc.moveDown(2.5);
 
@@ -108,7 +108,7 @@ const generateInvoicePDF = (user, doc) => {
     'Terms & Conditions',
     0, footerY + 26, { align: 'center', continued: true, link: 'https://sarjanai.com/terms' }
   ).text('  |  ', { continued: true, link: null })
-   .text('Privacy Policy', { link: 'https://sarjanai.com/privacy' });
+    .text('Privacy Policy', { link: 'https://sarjanai.com/privacy' });
 };
 
 // Change plan (free or pro)
