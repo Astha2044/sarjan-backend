@@ -1,216 +1,250 @@
+import express from 'express';
+import rateLimit from 'express-rate-limit';
+import { register, login, logout, verifyToken, forgotPassword, resetPassword } from '../controllers/auth.controller.js';
+import jwt from 'jsonwebtoken';
+import { registerValidation, loginValidation } from '../middlewares/validation.middleware.js';
+import { protect } from '../middlewares/auth.middleware.js';
+import User from '../models/User.js';
+import { verifyGoogleToken } from '../config/google-auth.config.js';
 
-/* eslint-disable @next/next/no-img-element */
-import React, { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
-import axios from "axios";
-import { toast } from "react-toastify";
-import { useRouter } from "next/router";
-import styles from "../../styles/Register.module.css";
-import { FaEye, FaEyeSlash } from "react-icons/fa";
-import Script from "next/script";
+const router = express.Router();
 
-const LoginModal = ({ open, onClose, onOpenRegister, onOpenForgotPassword }) => {
-  const router = useRouter();
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm();
+// Rate Limiter
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5,
+    message: { status: 'error', message: 'Too many login attempts, please try again after 15 minutes' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
-  const [showPassword, setShowPassword] = useState(false);
+/**
+ * @swagger
+ * tags:
+ *   name: Auth
+ *   description: Authentication endpoints
+ */
 
-  /* ================= NORMAL LOGIN ================= */
-  const onSubmit = async (data) => {
+/**
+ * @swagger
+ * /api/auth/register:
+ *   post:
+ *     summary: Register a new user
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *               - password
+ *             properties:
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: User registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Validation error or user exists
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/register', registerValidation, register);
+
+/**
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     summary: Login user
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       401:
+ *         description: Invalid credentials
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/login', loginLimiter, loginValidation, login);
+
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: Logout user
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Logged out successfully
+ */
+router.post('/logout', logout);
+
+
+
+/**
+ * @swagger
+ * /api/auth/verify:
+ *   get:
+ *     summary: Verify current user token
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Token is valid
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       401:
+ *         description: Not authorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get('/verify', protect, verifyToken);
+
+import passport from '../config/passport.js';
+
+router.post('/forgot-password', forgotPassword);
+router.put('/reset-password/:resettoken', resetPassword);
+
+/* ================= GOOGLE LOGIN (SERVICE BASED) ================= */
+router.post('/google/verify', async (req, res) => {
     try {
-      const res = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/login`,
-        {
-          email: data.email,
-          password: data.password,
+        const { idToken } = req.body;
+
+        if (!idToken) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'ID Token is required'
+            });
         }
-      );
 
-      localStorage.setItem("user", JSON.stringify(res.data?.data));
+        // Verify token from Google
+        const payload = await verifyGoogleToken(idToken);
 
-      toast.success("Login successful 🚀");
+        if (!payload) {
+            return res.status(401).json({
+                status: 'error',
+                message: 'Invalid Google token'
+            });
+        }
 
-      reset();
-      onClose();
-      router.push("/studio");
-    } catch (error) {
-      toast.error(error?.response?.data?.message || "Login failed");
-    }
-  };
+        const { sub: googleId, email, name, picture } = payload;
 
-  const handleClose = () => {
-    reset();
-    onClose();
-  };
+        // Check if user exists
+        let user = await User.findOne({
+            $or: [{ googleId }, { email }]
+        });
 
-  /* ================= BODY SCROLL ================= */
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "auto";
-    }
-
-    return () => {
-      document.body.style.overflow = "auto";
-    };
-  }, [open]);
-
-  /* ================= GOOGLE LOGIN ================= */
-  useEffect(() => {
-    if (open && window.google) {
-      window.google.accounts.id.initialize({
-        client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-        callback: async (response) => {
-          try {
-            const res = await axios.post(
-              `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/google/verify`,
-              { idToken: response.credential }
-            );
-
-            if (res.data?.status === "success") {
-              localStorage.setItem("user", JSON.stringify(res.data?.data));
-              toast.success("Google Login successful 🚀");
-              onClose();
-              router.push("/studio");
+        if (user) {
+            // If user exists but no googleId → attach it
+            if (!user.googleId) {
+                user.googleId = googleId;
             }
-          } catch (error) {
-            toast.error(
-              error?.response?.data?.message || "Google Login failed"
-            );
-          }
-        },
-      });
 
-      window.google.accounts.id.renderButton(
-        document.getElementById("googleLoginBtn"),
-        {
-          theme: "outline",
-          size: "large",
-          width: "100%",
+            // Update profile picture
+            user.profilePicture = picture || user.profilePicture;
+
+            await user.save();
+        } else {
+            // Create new user
+            user = await User.create({
+                name,
+                email,
+                googleId,
+                profilePicture: picture || '',
+                password: Math.random().toString(36).slice(-10), // dummy
+                isGoogleUser: true
+            });
         }
-      );
+
+        // Generate JWT
+        const token = jwt.sign(
+            { id: user._id },
+            process.env.ACCESS_TOKEN_SECRET,
+            { expiresIn: '7d' } // safer than 100 years 😄
+        );
+
+        // Set cookie
+        const isProd = process.env.NODE_ENV === 'production';
+
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: isProd,
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+
+        // Response
+        res.status(200).json({
+            status: 'success',
+            message: 'Google login successful',
+            data: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                token,
+                plan: user.plan,
+                messageCount: user.messageCount,
+                profilePicture: user.profilePicture
+            }
+        });
+
+    } catch (error) {
+        console.error('Google Login Error:', error);
+
+        res.status(500).json({
+            status: 'error',
+            message: 'Internal server error during Google login'
+        });
     }
-  }, [open]);
+});
 
-  if (!open) return null;
 
-  return (
-    <>
-      {/* ✅ Google Script */}
-      <Script
-        src="https://accounts.google.com/gsi/client"
-        strategy="afterInteractive"
-      />
-
-      <div className={styles.overlay}>
-        <div className={styles.modal}>
-          {/* Logo */}
-          <div className={styles.logoWrapper}>
-            <img
-              src="/images/sarjan.png"
-              alt="Sarjan AI"
-              className={styles.logo}
-            />
-          </div>
-
-          <h2 className={styles.title}>Welcome Back</h2>
-
-          {/* ================= FORM ================= */}
-          <form onSubmit={handleSubmit(onSubmit)}>
-            {/* Email */}
-            <div className={styles.field}>
-              <input
-                placeholder="Email"
-                type="email"
-                {...register("email", {
-                  required: "Email is required",
-                  pattern: {
-                    value: /^\S+@\S+$/i,
-                    message: "Invalid email",
-                  },
-                })}
-              />
-              {errors.email && <p>{errors.email.message}</p>}
-            </div>
-
-            {/* Password */}
-            <div className={styles.field} style={{ position: "relative" }}>
-              <input
-                placeholder="Password"
-                type={showPassword ? "text" : "password"}
-                {...register("password", {
-                  required: "Password required",
-                  minLength: { value: 6, message: "Min 6 characters" },
-                })}
-              />
-              <span
-                className={styles.eyeIcon}
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <FaEyeSlash /> : <FaEye />}
-              </span>
-              {errors.password && <p>{errors.password.message}</p>}
-            </div>
-
-            {/* Forgot Password */}
-            <div className={styles.forgotPassword}>
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  if (typeof onOpenForgotPassword === "function") {
-                    onOpenForgotPassword();
-                  } else {
-                    toast.info("Forgot password feature coming soon!");
-                  }
-                }}
-              >
-                Forgot Password?
-              </button>
-            </div>
-
-            <button disabled={isSubmitting} className={styles.submitBtn}>
-              {isSubmitting ? "Logging in..." : "Login"}
-            </button>
-          </form>
-
-          {/* Divider */}
-          <div className={styles.divider}>
-            <span>OR</span>
-          </div>
-
-          {/* ✅ Google Button */}
-          <div id="googleLoginBtn" style={{ width: "100%" }}></div>
-
-          {/* Switch */}
-          <div className={styles.switchAuth}>
-            <span>Don’t have an account?</span>
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onOpenRegister();
-              }}
-            >
-              Register
-            </button>
-          </div>
-
-          {/* Close */}
-          <button className={styles.closeBtn} onClick={handleClose}>
-            ✕
-          </button>
-        </div>
-      </div>
-    </>
-  );
-};
-
-export default LoginModal;
+export default router;
