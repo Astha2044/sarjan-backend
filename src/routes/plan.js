@@ -9,279 +9,351 @@ import { Buffer } from 'buffer';
 const router = express.Router();
 
 // ─────────────────────────────────────────────────────────
-// COLORS & CONSTANTS
+// CONSTANTS — all pixel values match tested Python layout
 // ─────────────────────────────────────────────────────────
-const TEAL       = '#00d1b2';
-const TEAL_LIGHT = '#e6faf8';
-const TEAL_DARK  = '#00a896';
-const DARK       = '#1a1a1a';
-const GRAY       = '#555555';
-const LIGHT_GRAY = '#f0f0f0';
-const WHITE      = '#ffffff';
+const TEAL = '#00d1b2';
+const TEAL_D = '#00a896';
+const TEAL_L = '#e6faf8';
+const TEAL_B = '#c8f0eb';
+const DARK = '#1a1a1a';
+const GRAY = '#666666';
+const MID = '#999999';
+const LGRAY = '#eeeeee';
+const WHITE = '#ffffff';
+const BG = '#f8f8f8';
+
+const PAGE_W = 595.28;  // A4
+const PAGE_H = 841.89;
+const MARGIN = 50;
+const CW = PAGE_W - 2 * MARGIN; // 495.28
 
 // ─────────────────────────────────────────────────────────
-// HELPER: Draw a filled rounded rectangle (PDFKit has no built-in)
+// HELPERS
 // ─────────────────────────────────────────────────────────
-const roundedRect = (doc, x, y, w, h, r, fillColor, strokeColor = null) => {
-  doc.save()
-    .roundedRect(x, y, w, h, r)
-    .fillAndStroke(fillColor, strokeColor || fillColor)
-    .restore();
+
+// PDFKit Y=0 is top. Draw text at exact (x, y) — NO flow/wrap
+const tx = (doc, text, x, y, opts = {}) => {
+  doc.text(text, x, y, {
+    lineBreak: false,
+    ...opts,
+  });
+};
+
+// Right-align text ending at x=rx
+const txR = (doc, text, rx, y) => {
+  const w = doc.widthOfString(text);
+  tx(doc, text, rx - w, y);
+};
+
+// Center text within a box starting at x, width w
+const txC = (doc, text, x, w, y) => {
+  const tw = doc.widthOfString(text);
+  tx(doc, text, x + (w - tw) / 2, y);
+};
+
+// Horizontal rule
+const hr = (doc, y, color = LGRAY, lw = 0.5) => {
+  doc.moveTo(MARGIN, y).lineTo(PAGE_W - MARGIN, y)
+    .lineWidth(lw).strokeColor(color).stroke();
 };
 
 // ─────────────────────────────────────────────────────────
-// MAIN: Generate Invoice PDF
+// GENERATE INVOICE PDF
+// Every Y is an absolute offset from page top (Y=0 at top).
+// Nothing uses doc.y — zero drift possible.
 // ─────────────────────────────────────────────────────────
 const generateInvoicePDF = (user, doc) => {
-  const now        = new Date();
-  const dateStr    = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  const monthName  = now.toLocaleDateString('en-GB', { month: 'long' });
-  const year       = now.getFullYear();
-  const monthYear  = `${monthName} ${year}`;
-  const invoiceNo  = `INV-${Date.now().toString().slice(-6)}`;
-
-  // Billing period: first → last day of current month
-  const firstDay   = new Date(now.getFullYear(), now.getMonth(), 1)
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const monthYr = now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const invNo = `INV-${Date.now().toString().slice(-6)}`;
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
     .toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
-  const lastDay    = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
     .toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
-  const period     = `${firstDay} – ${lastDay}`;
+  const period = `${firstDay} - ${lastDay}`;
 
-  const PAGE_W     = doc.page.width;
-  const MARGIN     = 50;
-  const CONTENT_W  = PAGE_W - MARGIN * 2;
+  // ── 1. TOP TEAL BAR ──────────────────────────────────
+  doc.rect(0, 0, PAGE_W, 6).fill(TEAL);
 
-  // ── 1. HEADER TEAL BAR ──────────────────────────────────
-  doc.rect(0, 0, PAGE_W, 8).fill(TEAL);
+  // ── 2. LOGO (left) ───────────────────────────────────
+  doc.font('Helvetica-Bold').fontSize(22).fillColor(DARK);
+  tx(doc, 'SARJAN', MARGIN, 22);
+  const sarjanW = doc.widthOfString('SARJAN');
+  doc.fillColor(TEAL);
+  tx(doc, ' Ai', MARGIN + sarjanW, 22);
 
-  // ── 2. LOGO (left) + INVOICE LABEL (right) ──────────────
-  const headerY = 28;
+  doc.font('Helvetica').fontSize(8).fillColor(GRAY);
+  tx(doc, 'Intelligent Design Systems', MARGIN, 46);
 
-  // Logo: "SARJAN" black + " Ai" teal
-  doc.fontSize(22).font('Helvetica-Bold').fillColor(DARK)
-    .text('SARJAN', MARGIN, headerY, { continued: true });
-  doc.fillColor(TEAL).text(' Ai');
+  // ── 3. INVOICE TITLE (right) ─────────────────────────
+  doc.font('Helvetica-Bold').fontSize(26).fillColor(DARK);
+  txR(doc, 'INVOICE', PAGE_W - MARGIN, 22);
 
-  // Tagline below logo
-  doc.fontSize(8).font('Helvetica').fillColor(GRAY)
-    .text('Intelligent Design Systems', MARGIN, headerY + 28);
+  // ── 4. META ROWS — each on its own fixed Y ───────────
+  // Label at LX, value at VX — no align:'right', no continued
+  const LX = PAGE_W - MARGIN - 200;
+  const VX = PAGE_W - MARGIN - 108;
+  const M_START = 58;
+  const M_GAP = 14;
 
-  // "INVOICE" right side
-  doc.fontSize(26).font('Helvetica-Bold').fillColor(DARK)
-    .text('INVOICE', MARGIN, headerY, { align: 'right', width: CONTENT_W });
-
-  // Invoice meta: number, date, period, status
-  const metaLines = [
-    { label: 'Invoice No:', value: invoiceNo },
-    { label: 'Date:',       value: dateStr   },
-    { label: 'Period:',     value: monthYear },
-    { label: 'Status:',     value: 'PAID'    },
+  const metaRows = [
+    { lbl: 'Invoice No:', val: invNo, col: DARK },
+    { lbl: 'Date:', val: dateStr, col: GRAY },
+    { lbl: 'Period:', val: monthYr, col: GRAY },
+    { lbl: 'Status:', val: 'PAID', col: TEAL },
   ];
-  let metaY = headerY + 34;
-  metaLines.forEach(({ label, value }) => {
-    doc.fontSize(9).font('Helvetica-Bold').fillColor(DARK)
-      .text(label, MARGIN, metaY, { continued: true, width: CONTENT_W, align: 'right' });
-    const color = label === 'Status:' ? TEAL : GRAY;
-    doc.font('Helvetica').fillColor(color).text(` ${value}`);
-    metaY += 14;
+
+  metaRows.forEach(({ lbl, val, col }, i) => {
+    const my = M_START + i * M_GAP;
+    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(DARK);
+    tx(doc, lbl, LX, my);
+    doc.font('Helvetica').fontSize(8.5).fillColor(col);
+    tx(doc, val, VX, my);
   });
 
-  // ── 3. DIVIDER ───────────────────────────────────────────
-  const divY = headerY + 95;
-  doc.moveTo(MARGIN, divY).lineTo(PAGE_W - MARGIN, divY)
-    .lineWidth(2).strokeColor(TEAL).stroke();
+  // ── 5. TEAL DIVIDER ──────────────────────────────────
+  const DIV_Y = 112;
+  hr(doc, DIV_Y, TEAL, 2);
 
-  // ── 4. FREE TRIAL BANNER ─────────────────────────────────
-  const bannerY = divY + 14;
-  roundedRect(doc, MARGIN, bannerY, CONTENT_W, 44, 6, TEAL);
+  // ── 6. FREE TRIAL BANNER ─────────────────────────────
+  const BAN_Y = DIV_Y + 12;
+  const BAN_H = 44;
 
-  // Banner text left
-  doc.fontSize(11).font('Helvetica-Bold').fillColor(WHITE)
-    .text('🎉  Pro Plan — Free Trial Active', MARGIN + 14, bannerY + 8);
-  doc.fontSize(8.5).font('Helvetica').fillColor('#d0f8f2')
-    .text('You are currently on a free trial. No charges applied for this period.',
-      MARGIN + 14, bannerY + 23);
+  doc.roundedRect(MARGIN, BAN_Y, CW, BAN_H, 6).fill(TEAL);
 
-  // "FREE TRIAL" pill right side
-  roundedRect(doc, PAGE_W - MARGIN - 84, bannerY + 12, 74, 20, 10, WHITE);
-  doc.fontSize(8).font('Helvetica-Bold').fillColor(TEAL_DARK)
-    .text('FREE TRIAL', PAGE_W - MARGIN - 84, bannerY + 17,
-      { width: 74, align: 'center' });
+  doc.font('Helvetica-Bold').fontSize(10.5).fillColor(WHITE);
+  tx(doc, 'Pro Plan - Free Trial Active', MARGIN + 14, BAN_Y + 9);
 
-  // ── 5. BILL TO / FROM ─────────────────────────────────────
-  const billY   = bannerY + 64;
-  const colW    = CONTENT_W / 2 - 10;
+  doc.font('Helvetica').fontSize(8.5).fillColor('#d0f8f2');
+  tx(doc, 'You are currently on a free trial. No charges applied for this period.',
+    MARGIN + 14, BAN_Y + 26);
 
-  // --- BILL TO box ---
-  roundedRect(doc, MARGIN, billY, colW, 86, 6, '#f8f8f8', LIGHT_GRAY);
+  // Pill (right side of banner)
+  const PILL_W = 78;
+  const PILL_X = PAGE_W - MARGIN - PILL_W - 10;
+  const PILL_Y = BAN_Y + 13;
+  doc.roundedRect(PILL_X, PILL_Y, PILL_W, 18, 9).fill(WHITE);
+  doc.font('Helvetica-Bold').fontSize(7.5).fillColor(TEAL_D);
+  txC(doc, 'FREE TRIAL', PILL_X, PILL_W, PILL_Y + 5);
 
-  doc.fontSize(7.5).font('Helvetica-Bold').fillColor(TEAL_DARK)
-    .text('BILL TO', MARGIN + 14, billY + 10);
-  doc.moveTo(MARGIN + 14, billY + 20).lineTo(MARGIN + colW - 14, billY + 20)
-    .lineWidth(0.5).strokeColor(TEAL_LIGHT).stroke();
+  // ── 7. BILL TO / ISSUED BY ───────────────────────────
+  const BILL_Y = BAN_Y + BAN_H + 14;
+  const BOX_H = 90;
+  const BOX_W = (CW - 14) / 2;
 
-  doc.fontSize(11).font('Helvetica-Bold').fillColor(DARK)
-    .text(user.name || 'Valued Customer', MARGIN + 14, billY + 26);
-  doc.fontSize(9).font('Helvetica').fillColor(GRAY)
-    .text(user.email,            MARGIN + 14, billY + 42)
-    .text(`Plan: Pro`,           MARGIN + 14, billY + 54)
-    .text(`Member since: ${monthYear}`, MARGIN + 14, billY + 66);
+  // Box 1
+  doc.roundedRect(MARGIN, BILL_Y, BOX_W, BOX_H, 5)
+    .fillAndStroke(BG, LGRAY);
 
-  // --- ISSUED BY box ---
-  const col2X = MARGIN + colW + 20;
-  roundedRect(doc, col2X, billY, colW, 86, 6, '#f8f8f8', LIGHT_GRAY);
+  doc.font('Helvetica-Bold').fontSize(7.5).fillColor(TEAL_D);
+  tx(doc, 'BILL TO', MARGIN + 12, BILL_Y + 10);
 
-  doc.fontSize(7.5).font('Helvetica-Bold').fillColor(TEAL_DARK)
-    .text('ISSUED BY', col2X + 14, billY + 10);
-  doc.moveTo(col2X + 14, billY + 20).lineTo(col2X + colW - 14, billY + 20)
-    .lineWidth(0.5).strokeColor(TEAL_LIGHT).stroke();
+  doc.moveTo(MARGIN + 12, BILL_Y + 22)
+    .lineTo(MARGIN + BOX_W - 12, BILL_Y + 22)
+    .lineWidth(0.5).strokeColor(TEAL_L).stroke();
 
-  doc.fontSize(11).font('Helvetica-Bold').fillColor(DARK)
-    .text('Sarjan AI', col2X + 14, billY + 26);
-  doc.fontSize(9).font('Helvetica').fillColor(GRAY)
-    .text('www.sarjanai.com',       col2X + 14, billY + 42)
-    .text('support@sarjanai.com',   col2X + 14, billY + 54)
-    .text('India',                  col2X + 14, billY + 66);
+  doc.font('Helvetica-Bold').fontSize(11).fillColor(DARK);
+  tx(doc, user.name || 'Valued Customer', MARGIN + 12, BILL_Y + 28);
 
-  // ── 6. TABLE ─────────────────────────────────────────────
-  const tableY   = billY + 104;
-  const colWidths = [270, 50, 80, 80]; // Desc, Qty, Price, Total
-  const colX      = [MARGIN, MARGIN + 270, MARGIN + 320, MARGIN + 400];
-  const rowH      = 20;
+  doc.font('Helvetica').fontSize(8.5).fillColor(GRAY);
+  tx(doc, user.email, MARGIN + 12, BILL_Y + 44);
+  tx(doc, 'Plan: Pro', MARGIN + 12, BILL_Y + 57);
+  tx(doc, `Member since: ${monthYr}`, MARGIN + 12, BILL_Y + 70);
 
-  // Table header
-  doc.rect(MARGIN, tableY, CONTENT_W, rowH).fill(DARK);
-  const headers = ['DESCRIPTION', 'QTY', 'PRICE', 'TOTAL'];
-  headers.forEach((h, i) => {
-    const align = i === 0 ? 'left' : 'center';
-    doc.fontSize(8).font('Helvetica-Bold').fillColor(WHITE)
-      .text(h, colX[i] + (i === 0 ? 10 : 0), tableY + 6,
-        { width: colWidths[i], align });
-  });
+  // Box 2
+  const B2X = MARGIN + BOX_W + 14;
+  doc.roundedRect(B2X, BILL_Y, BOX_W, BOX_H, 5)
+    .fillAndStroke(BG, LGRAY);
 
-  // Row 1: Pro Subscription
-  const r1Y = tableY + rowH + 4;
-  doc.fontSize(10).font('Helvetica-Bold').fillColor(DARK)
-    .text('Sarjan AI — Pro Plan Subscription', MARGIN + 10, r1Y);
-  doc.fontSize(8.5).font('Helvetica').fillColor(GRAY)
-    .text(`Billing period: ${period}`, MARGIN + 10, r1Y + 14)
-    .text('Includes: Unlimited messages, Image generation,', MARGIN + 10, r1Y + 25)
-    .text('Priority responses, Real-time analytics, Full API access', MARGIN + 10, r1Y + 36);
+  doc.font('Helvetica-Bold').fontSize(7.5).fillColor(TEAL_D);
+  tx(doc, 'ISSUED BY', B2X + 12, BILL_Y + 10);
 
-  // FREE TRIAL PERIOD pill
-  roundedRect(doc, MARGIN + 10, r1Y + 50, 90, 14, 7, TEAL_LIGHT, '#b2ede8');
-  doc.fontSize(7.5).font('Helvetica-Bold').fillColor(TEAL_DARK)
-    .text('FREE TRIAL PERIOD', MARGIN + 10, r1Y + 53, { width: 90, align: 'center' });
+  doc.moveTo(B2X + 12, BILL_Y + 22)
+    .lineTo(B2X + BOX_W - 12, BILL_Y + 22)
+    .lineWidth(0.5).strokeColor(TEAL_L).stroke();
 
-  // Row 1 right columns
-  doc.fontSize(9).font('Helvetica').fillColor(GRAY)
-    .text('1',       colX[1], r1Y + 25, { width: colWidths[1], align: 'center' })
-    .text('Rs. 0.00', colX[2], r1Y + 25, { width: colWidths[2], align: 'center' });
-  doc.fontSize(9).font('Helvetica-Bold').fillColor(DARK)
-    .text('Rs. 0.00', colX[3], r1Y + 25, { width: colWidths[3], align: 'center' });
+  doc.font('Helvetica-Bold').fontSize(11).fillColor(DARK);
+  tx(doc, 'Sarjan AI', B2X + 12, BILL_Y + 28);
 
-  const r1H = 72;
-  doc.moveTo(MARGIN, r1Y + r1H).lineTo(PAGE_W - MARGIN, r1Y + r1H)
-    .lineWidth(0.5).strokeColor(LIGHT_GRAY).stroke();
+  doc.font('Helvetica').fontSize(8.5).fillColor(GRAY);
+  tx(doc, 'www.sarjanai.com', B2X + 12, BILL_Y + 44);
+  tx(doc, 'support@sarjanai.com', B2X + 12, BILL_Y + 57);
+  tx(doc, 'India', B2X + 12, BILL_Y + 70);
 
-  // Row 2: Free Trial Discount
-  const r2Y = r1Y + r1H + 6;
-  doc.fontSize(9.5).font('Helvetica-Bold').fillColor(DARK)
-    .text('14-Day Free Trial Discount', MARGIN + 10, r2Y);
-  doc.fontSize(8.5).font('Helvetica').fillColor(GRAY)
-    .text('Promotional offer — no charge applied this month', MARGIN + 10, r2Y + 13);
+  // ── 8. TABLE ─────────────────────────────────────────
+  const TBL_Y = BILL_Y + BOX_H + 18;
+  const TBL_H = 20;
 
-  doc.fontSize(9).font('Helvetica').fillColor(GRAY)
-    .text('1', colX[1], r2Y + 6, { width: colWidths[1], align: 'center' });
-  doc.fillColor(TEAL_DARK)
-    .text('- Rs. 0.00', colX[2], r2Y + 6, { width: colWidths[2], align: 'center' });
-  doc.font('Helvetica-Bold').fillColor(TEAL_DARK)
-    .text('- Rs. 0.00', colX[3], r2Y + 6, { width: colWidths[3], align: 'center' });
+  // Column definitions
+  const C = {
+    desc: { x: MARGIN + 10, w: 258 },
+    qty: { x: MARGIN + 268, w: 50 },
+    price: { x: MARGIN + 318, w: 80 },
+    total: { x: PAGE_W - MARGIN - 97, w: 97 },
+  };
 
-  const r2H = 32;
-  doc.moveTo(MARGIN, r2Y + r2H).lineTo(PAGE_W - MARGIN, r2Y + r2H)
-    .lineWidth(0.5).strokeColor(LIGHT_GRAY).stroke();
+  // Header bar
+  doc.rect(MARGIN, TBL_Y, CW, TBL_H).fill(DARK);
 
-  // ── 7. TOTALS ─────────────────────────────────────────────
-  const totY    = r2Y + r2H + 14;
-  const totX    = PAGE_W - MARGIN - 200;
-  const totW    = 200;
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(WHITE);
+  tx(doc, 'DESCRIPTION', C.desc.x, TBL_Y + 6);
+  txC(doc, 'QTY', C.qty.x, C.qty.w, TBL_Y + 6);
+  txC(doc, 'PRICE', C.price.x, C.price.w, TBL_Y + 6);
+  txR(doc, 'TOTAL', C.total.x + C.total.w, TBL_Y + 6);
+
+  // ── ROW 1 ───────────────────────────────────────────
+  const R1_Y = TBL_Y + TBL_H + 8;
+
+  doc.font('Helvetica-Bold').fontSize(10).fillColor(DARK);
+  tx(doc, 'Sarjan AI - Pro Plan Subscription', C.desc.x, R1_Y + 10);
+
+  doc.font('Helvetica').fontSize(8.5).fillColor(GRAY);
+  tx(doc, `Billing period: ${period}`, C.desc.x, R1_Y + 24);
+  tx(doc, 'Includes: Unlimited messages, Image generation,', C.desc.x, R1_Y + 36);
+  tx(doc, 'Priority responses, Real-time analytics, Full API access', C.desc.x, R1_Y + 48);
+
+  // FREE TRIAL PERIOD badge
+  const BADGE_Y = R1_Y + 60;
+  doc.roundedRect(C.desc.x, BADGE_Y, 94, 14, 7).fillAndStroke(TEAL_L, TEAL_B);
+  doc.font('Helvetica-Bold').fontSize(7).fillColor(TEAL_D);
+  txC(doc, 'FREE TRIAL PERIOD', C.desc.x, 94, BADGE_Y + 3);
+
+  // Right cols — centered at row middle
+  const R1_MID = R1_Y + 32;
+  doc.font('Helvetica').fontSize(9).fillColor(GRAY);
+  txC(doc, '1', C.qty.x, C.qty.w, R1_MID);
+  txC(doc, 'Rs. 0.00', C.price.x, C.price.w, R1_MID);
+  doc.font('Helvetica-Bold').fillColor(DARK);
+  txR(doc, 'Rs. 0.00', C.total.x + C.total.w, R1_MID);
+
+  const R1_BOT = BADGE_Y + 22;
+  hr(doc, R1_BOT, LGRAY, 0.5);
+
+  // ── ROW 2 ───────────────────────────────────────────
+  const R2_Y = R1_BOT + 8;
+
+  doc.font('Helvetica-Bold').fontSize(10).fillColor(DARK);
+  tx(doc, '14-Day Free Trial Discount', C.desc.x, R2_Y + 10);
+
+  doc.font('Helvetica').fontSize(8.5).fillColor(GRAY);
+  tx(doc, 'Promotional offer - no charge applied this month', C.desc.x, R2_Y + 24);
+
+  const R2_MID = R2_Y + 17;
+  doc.font('Helvetica').fontSize(9).fillColor(GRAY);
+  txC(doc, '1', C.qty.x, C.qty.w, R2_MID);
+  doc.fillColor(TEAL_D);
+  txC(doc, '- Rs. 0.00', C.price.x, C.price.w, R2_MID);
+  doc.font('Helvetica-Bold').fillColor(TEAL_D);
+  txR(doc, '- Rs. 0.00', C.total.x + C.total.w, R2_MID);
+
+  const R2_BOT = R2_Y + 36;
+  hr(doc, R2_BOT, LGRAY, 0.5);
+
+  // ── 9. TOTALS ────────────────────────────────────────
+  const TOT_Y = R2_BOT + 12;
+  const TOT_LX = PAGE_W - MARGIN - 210;
+  const TOT_RX = PAGE_W - MARGIN - 5;  // right-edge for values
+  const TOT_H = 15;
 
   const totRows = [
-    { label: 'Subtotal',             value: 'Rs. 0.00', color: GRAY   },
-    { label: 'GST (0%)',             value: 'Rs. 0.00', color: GRAY   },
-    { label: 'Free Trial Discount',  value: '- Rs. 0.00', color: TEAL_DARK },
+    { lbl: 'Subtotal', val: 'Rs. 0.00', col: GRAY, bold: false },
+    { lbl: 'GST (0%)', val: 'Rs. 0.00', col: GRAY, bold: false },
+    { lbl: 'Free Trial Discount', val: '- Rs. 0.00', col: TEAL_D, bold: false },
   ];
-  let ty = totY;
-  totRows.forEach(({ label, value, color }) => {
-    doc.fontSize(9).font('Helvetica').fillColor(GRAY).text(label, totX, ty, { width: 110 });
-    doc.fontSize(9).font('Helvetica').fillColor(color).text(value, totX + 110, ty, { width: 90, align: 'right' });
-    ty += 16;
+
+  totRows.forEach(({ lbl, val, col, bold }, i) => {
+    const ty = TOT_Y + i * TOT_H + 10;
+    doc.font('Helvetica').fontSize(9).fillColor(GRAY);
+    tx(doc, lbl, TOT_LX, ty);
+    doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9).fillColor(col);
+    txR(doc, val, TOT_RX, ty);
   });
 
-  // Total due highlighted box
-  roundedRect(doc, totX - 10, ty + 4, totW + 10, 28, 6, TEAL_LIGHT, '#b2ede8');
-  doc.fontSize(11).font('Helvetica-Bold').fillColor(DARK)
-    .text('TOTAL DUE', totX, ty + 11, { width: 110 });
-  doc.fontSize(12).font('Helvetica-Bold').fillColor(TEAL)
-    .text('Rs. 0.00', totX + 110, ty + 10, { width: 90, align: 'right' });
+  // Total Due box
+  const TB_Y = TOT_Y + TOT_H * 3 + 6;
+  const TB_H = 28;
+  doc.roundedRect(TOT_LX - 10, TB_Y, 220, TB_H, 5).fillAndStroke(TEAL_L, TEAL_B);
 
-  // ── 8. PAID STAMP ─────────────────────────────────────────
-  const stampY = totY;
-  doc.save()
-    .translate(MARGIN + 60, stampY + 20)
-    .rotate(-18);
-  doc.roundedRect(-44, -18, 88, 36, 4)
+  doc.font('Helvetica-Bold').fontSize(11).fillColor(DARK);
+  tx(doc, 'TOTAL DUE', TOT_LX, TB_Y + 8);
+  doc.font('Helvetica-Bold').fontSize(12).fillColor(TEAL);
+  txR(doc, 'Rs. 0.00', TOT_RX, TB_Y + 7);
+
+  // ── 10. PAID STAMP ───────────────────────────────────
+  doc.save();
+  doc.translate(MARGIN + 75, TOT_Y + 30).rotate(-18);
+  doc.roundedRect(-44, -16, 88, 32, 4)
     .lineWidth(2.5).strokeColor(TEAL).stroke();
-  doc.fontSize(18).font('Helvetica-Bold').fillColor(TEAL).text('PAID', -32, -10);
+  doc.font('Helvetica-Bold').fontSize(20).fillColor(TEAL);
+  const paidW = doc.widthOfString('PAID');
+  tx(doc, 'PAID', -paidW / 2, -11);
   doc.restore();
 
-  // ── 9. FEATURES BOX ────────────────────────────────────────
-  const featY = ty + 52;
-  roundedRect(doc, MARGIN, featY, CONTENT_W, 66, 6, '#f8fffe', '#c8f0eb');
+  // ── 11. FEATURES BOX ─────────────────────────────────
+  const FEAT_Y = TB_Y + TB_H + 20;
+  const FEAT_H = 66;
+  doc.roundedRect(MARGIN, FEAT_Y, CW, FEAT_H, 6).fillAndStroke('#f8fffe', TEAL_B);
 
-  doc.fontSize(7.5).font('Helvetica-Bold').fillColor(TEAL_DARK)
-    .text("WHAT'S INCLUDED IN YOUR PRO PLAN", MARGIN + 14, featY + 10);
+  doc.font('Helvetica-Bold').fontSize(7.5).fillColor(TEAL_D);
+  tx(doc, "WHAT'S INCLUDED IN YOUR PRO PLAN", MARGIN + 14, FEAT_Y + 10);
 
-  const features = [
-    'Unlimited messages',   'Image generation',
-    'Priority responses',   'Real-time analytics',
-    'Full API access',      'Custom templates',
+  const feats = [
+    'Unlimited messages', 'Image generation', 'Priority responses',
+    'Real-time analytics', 'Full API access', 'Custom templates',
   ];
-  const fColW = CONTENT_W / 3;
-  features.forEach((f, i) => {
-    const fx = MARGIN + 14 + (i % 3) * fColW;
-    const fy = featY + 24 + Math.floor(i / 3) * 16;
-    doc.fontSize(8.5).font('Helvetica').fillColor(DARK)
-      .text(`✓  ${f}`, fx, fy, { width: fColW - 10 });
+  const F_COL_W = (CW - 28) / 3;
+  feats.forEach((f, i) => {
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    const fx = MARGIN + 14 + col * F_COL_W;
+    const fy = FEAT_Y + 26 + row * 16;
+    doc.font('Helvetica').fontSize(8.5).fillColor(DARK);
+    tx(doc, `\u2713  ${f}`, fx, fy);
   });
 
-  // ── 10. FOOTER ─────────────────────────────────────────────
-  const footY = featY + 86;
-  doc.moveTo(MARGIN, footY).lineTo(PAGE_W - MARGIN, footY)
-    .lineWidth(0.5).strokeColor(LIGHT_GRAY).stroke();
+  // ── 12. FOOTER ───────────────────────────────────────
+  const FOOT_Y = FEAT_Y + FEAT_H + 14;
+  hr(doc, FOOT_Y, LGRAY, 0.5);
 
-  doc.fontSize(9).font('Helvetica').fillColor(TEAL_DARK)
-    .text('www.sarjanai.com', 0, footY + 10, { align: 'center', link: 'https://sarjanai.com' });
+  // Website — centered
+  doc.font('Helvetica').fontSize(9).fillColor(TEAL_D);
+  const siteText = 'www.sarjanai.com';
+  const siteW = doc.widthOfString(siteText);
+  tx(doc, siteText, (PAGE_W - siteW) / 2, FOOT_Y + 10);
 
-  doc.fontSize(8).fillColor('#aaa')
-    .text('Terms & Conditions', 0, footY + 23,
-      { align: 'center', continued: true, link: 'https://sarjanai.com/terms', width: PAGE_W })
-    .text('  |  ', { continued: true, link: null })
-    .text('Privacy Policy', { link: 'https://sarjanai.com/privacy', continued: true })
-    .text('  |  ', { continued: true, link: null })
-    .text('Support', { link: 'https://sarjanai.com/contact' });
+  // Footer links — measured and placed precisely, NO continued:true
+  doc.font('Helvetica').fontSize(8);
+  const footLinks = [
+    { text: 'Terms & Conditions', color: MID },
+    { text: '  |  ', color: '#cccccc' },
+    { text: 'Privacy Policy', color: MID },
+    { text: '  |  ', color: '#cccccc' },
+    { text: 'Support', color: MID },
+  ];
+  const totalLW = footLinks.reduce((sum, { text }) =>
+    sum + doc.widthOfString(text), 0);
+  let lx = (PAGE_W - totalLW) / 2;
+  const LINK_Y = FOOT_Y + 24;
 
-  doc.fontSize(7.5).fillColor('#ccc')
-    .text('SARJAN AI · Intelligent Design Systems · India', 0, footY + 38, { align: 'center' });
+  footLinks.forEach(({ text, color }) => {
+    doc.font('Helvetica').fontSize(8).fillColor(color);
+    tx(doc, text, lx, LINK_Y);
+    lx += doc.widthOfString(text);
+  });
+
+  // Tagline
+  doc.font('Helvetica').fontSize(7.5).fillColor('#cccccc');
+  const tagText = 'SARJAN AI  \u00b7  Intelligent Design Systems  \u00b7  India';
+  const tagW = doc.widthOfString(tagText);
+  tx(doc, tagText, (PAGE_W - tagW) / 2, FOOT_Y + 38);
 
   // Bottom teal bar
-  const pageH = doc.page.height;
-  doc.rect(0, pageH - 6, PAGE_W, 6).fill(TEAL);
+  doc.rect(0, PAGE_H - 6, PAGE_W, 6).fill(TEAL);
 };
 
 // ─────────────────────────────────────────────────────────
-// ROUTE: Change plan (free or pro)
+// ROUTE: Change plan
 // ─────────────────────────────────────────────────────────
 router.post("/change", protect, async (req, res) => {
   try {
@@ -296,47 +368,39 @@ router.post("/change", protect, async (req, res) => {
       return res.status(403).json({ error: "Downgrading to free is not allowed for Pro users." });
     }
 
-    const user = await User.findByIdAndUpdate(
-      req.user.id,
-      { plan },
-      { new: true }
-    );
+    const user = await User.findByIdAndUpdate(req.user.id, { plan }, { new: true });
 
-    // Send invoice email on Pro upgrade
     if (plan === "pro") {
       try {
-        const doc      = new PDFDocument({ margin: 50, size: 'A4' });
-        const buffers  = [];
+        const doc = new PDFDocument({ margin: 50, size: 'A4' });
+        const buffers = [];
         doc.on('data', buffers.push.bind(buffers));
         doc.on('end', async () => {
           const pdfData = Buffer.concat(buffers);
           await sendEmail({
             email: user.email,
-            subject: '🎉 Welcome to Sarjan AI Pro — Your Invoice',
+            subject: 'Welcome to Sarjan AI Pro - Your Invoice',
             html: getProUpgradeEmailHtml(user.name),
-            attachments: [
-              {
-                filename: `SarjanAI_Invoice_${user._id}.pdf`,
-                content: pdfData,
-                contentType: 'application/pdf',
-              },
-            ],
+            attachments: [{
+              filename: `SarjanAI_Invoice_${user._id}.pdf`,
+              content: pdfData,
+              contentType: 'application/pdf',
+            }],
           });
-          console.log(`✅ Invoice emailed to ${user.email}`);
+          console.log(`Invoice emailed to ${user.email}`);
         });
         generateInvoicePDF(user, doc);
         doc.end();
       } catch (emailErr) {
-        console.error("❌ Failed to send invoice email:", emailErr.message);
+        console.error("Failed to send invoice email:", emailErr.message);
       }
     }
 
     res.json({
       success: true,
       plan: user.plan,
-      message: `Plan changed to ${plan.charAt(0).toUpperCase() + plan.slice(1)} successfully!${
-        plan === "pro" ? " Invoice sent to your email." : ""
-      }`,
+      message: `Plan changed to ${plan.charAt(0).toUpperCase() + plan.slice(1)} successfully!${plan === "pro" ? " Invoice sent to your email." : ""
+        }`,
     });
   } catch (err) {
     console.error("Plan change error:", err);
@@ -345,7 +409,7 @@ router.post("/change", protect, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────
-// ROUTE: Get current plan status
+// ROUTE: Get current plan
 // ─────────────────────────────────────────────────────────
 router.get("/status", protect, async (req, res) => {
   try {
@@ -357,16 +421,14 @@ router.get("/status", protect, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────
-// ROUTE: Download Invoice (Pro only)
+// ROUTE: Download invoice (Pro only)
 // ─────────────────────────────────────────────────────────
 router.get("/invoice", protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
-
     if (user.plan !== "pro") {
       return res.status(403).json({ error: "Invoices are only available for Pro users." });
     }
-
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition',

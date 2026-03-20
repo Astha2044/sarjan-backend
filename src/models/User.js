@@ -16,7 +16,12 @@ const userSchema = mongoose.Schema(
         },
         password: {
             type: String,
-            required: [true, 'Please add a password'],
+            required: [
+                function () {
+                    return !this.googleId;
+                },
+                'Please add a password',
+            ],
             select: false,
         },
         plan: {
@@ -28,6 +33,10 @@ const userSchema = mongoose.Schema(
             type: Number,
             default: 0,
         },
+        resetPasswordToken: String,
+        resetPasswordExpire: Date,
+        googleId: String,
+        profilePicture: String,
     },
     {
         timestamps: true,

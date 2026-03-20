@@ -1,147 +1,216 @@
-import express from 'express';
-import rateLimit from 'express-rate-limit';
-import { register, login, logout, verifyToken } from '../controllers/auth.controller.js';
-import { registerValidation, loginValidation } from '../middlewares/validation.middleware.js';
-import { protect } from '../middlewares/auth.middleware.js';
 
-const router = express.Router();
+/* eslint-disable @next/next/no-img-element */
+import React, { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import axios from "axios";
+import { toast } from "react-toastify";
+import { useRouter } from "next/router";
+import styles from "../../styles/Register.module.css";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
+import Script from "next/script";
 
-// Rate Limiter
-const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5,
-    message: { status: 'error', message: 'Too many login attempts, please try again after 15 minutes' },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
+const LoginModal = ({ open, onClose, onOpenRegister, onOpenForgotPassword }) => {
+  const router = useRouter();
 
-/**
- * @swagger
- * tags:
- *   name: Auth
- *   description: Authentication endpoints
- */
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm();
 
-/**
- * @swagger
- * /api/auth/register:
- *   post:
- *     summary: Register a new user
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - name
- *               - email
- *               - password
- *             properties:
- *               name:
- *                 type: string
- *               email:
- *                 type: string
- *               password:
- *                 type: string
- *     responses:
- *       201:
- *         description: User registered successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AuthResponse'
- *       400:
- *         description: Validation error or user exists
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-router.post('/register', registerValidation, register);
+  const [showPassword, setShowPassword] = useState(false);
 
-/**
- * @swagger
- * /api/auth/login:
- *   post:
- *     summary: Login user
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *               password:
- *                 type: string
- *     responses:
- *       200:
- *         description: Login successful
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AuthResponse'
- *       401:
- *         description: Invalid credentials
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-router.post('/login', loginLimiter, loginValidation, login);
+  /* ================= NORMAL LOGIN ================= */
+  const onSubmit = async (data) => {
+    try {
+      const res = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/login`,
+        {
+          email: data.email,
+          password: data.password,
+        }
+      );
 
-/**
- * @swagger
- * /api/auth/logout:
- *   post:
- *     summary: Logout user
- *     tags: [Auth]
- *     responses:
- *       200:
- *         description: Logged out successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: string
- *                   example: success
- *                 message:
- *                   type: string
- *                   example: Logged out successfully
- */
-router.post('/logout', logout);
+      localStorage.setItem("user", JSON.stringify(res.data?.data));
 
+      toast.success("Login successful 🚀");
 
+      reset();
+      onClose();
+      router.push("/studio");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Login failed");
+    }
+  };
 
-/**
- * @swagger
- * /api/auth/verify:
- *   get:
- *     summary: Verify current user token
- *     tags: [Auth]
- *     responses:
- *       200:
- *         description: Token is valid
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AuthResponse'
- *       401:
- *         description: Not authorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-router.get('/verify', protect, verifyToken);
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
 
-export default router;
+  /* ================= BODY SCROLL ================= */
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "auto";
+    }
+
+    return () => {
+      document.body.style.overflow = "auto";
+    };
+  }, [open]);
+
+  /* ================= GOOGLE LOGIN ================= */
+  useEffect(() => {
+    if (open && window.google) {
+      window.google.accounts.id.initialize({
+        client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+        callback: async (response) => {
+          try {
+            const res = await axios.post(
+              `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/google/verify`,
+              { idToken: response.credential }
+            );
+
+            if (res.data?.status === "success") {
+              localStorage.setItem("user", JSON.stringify(res.data?.data));
+              toast.success("Google Login successful 🚀");
+              onClose();
+              router.push("/studio");
+            }
+          } catch (error) {
+            toast.error(
+              error?.response?.data?.message || "Google Login failed"
+            );
+          }
+        },
+      });
+
+      window.google.accounts.id.renderButton(
+        document.getElementById("googleLoginBtn"),
+        {
+          theme: "outline",
+          size: "large",
+          width: "100%",
+        }
+      );
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <>
+      {/* ✅ Google Script */}
+      <Script
+        src="https://accounts.google.com/gsi/client"
+        strategy="afterInteractive"
+      />
+
+      <div className={styles.overlay}>
+        <div className={styles.modal}>
+          {/* Logo */}
+          <div className={styles.logoWrapper}>
+            <img
+              src="/images/sarjan.png"
+              alt="Sarjan AI"
+              className={styles.logo}
+            />
+          </div>
+
+          <h2 className={styles.title}>Welcome Back</h2>
+
+          {/* ================= FORM ================= */}
+          <form onSubmit={handleSubmit(onSubmit)}>
+            {/* Email */}
+            <div className={styles.field}>
+              <input
+                placeholder="Email"
+                type="email"
+                {...register("email", {
+                  required: "Email is required",
+                  pattern: {
+                    value: /^\S+@\S+$/i,
+                    message: "Invalid email",
+                  },
+                })}
+              />
+              {errors.email && <p>{errors.email.message}</p>}
+            </div>
+
+            {/* Password */}
+            <div className={styles.field} style={{ position: "relative" }}>
+              <input
+                placeholder="Password"
+                type={showPassword ? "text" : "password"}
+                {...register("password", {
+                  required: "Password required",
+                  minLength: { value: 6, message: "Min 6 characters" },
+                })}
+              />
+              <span
+                className={styles.eyeIcon}
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <FaEyeSlash /> : <FaEye />}
+              </span>
+              {errors.password && <p>{errors.password.message}</p>}
+            </div>
+
+            {/* Forgot Password */}
+            <div className={styles.forgotPassword}>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  if (typeof onOpenForgotPassword === "function") {
+                    onOpenForgotPassword();
+                  } else {
+                    toast.info("Forgot password feature coming soon!");
+                  }
+                }}
+              >
+                Forgot Password?
+              </button>
+            </div>
+
+            <button disabled={isSubmitting} className={styles.submitBtn}>
+              {isSubmitting ? "Logging in..." : "Login"}
+            </button>
+          </form>
+
+          {/* Divider */}
+          <div className={styles.divider}>
+            <span>OR</span>
+          </div>
+
+          {/* ✅ Google Button */}
+          <div id="googleLoginBtn" style={{ width: "100%" }}></div>
+
+          {/* Switch */}
+          <div className={styles.switchAuth}>
+            <span>Don’t have an account?</span>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenRegister();
+              }}
+            >
+              Register
+            </button>
+          </div>
+
+          {/* Close */}
+          <button className={styles.closeBtn} onClick={handleClose}>
+            ✕
+          </button>
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default LoginModal;

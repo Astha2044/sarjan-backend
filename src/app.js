@@ -11,8 +11,11 @@ import authRoutes from './routes/auth.routes.js';
 import chatRoutes from './routes/chat.routes.js';
 import planRoutes from './routes/plan.js';
 import swaggerSpecs from './config/swagger.js';
+import passport from './config/passport.js';
 
 const app = express();
+
+app.use(passport.initialize());
 
 // Middleware
 app.use(express.json()); // Body parser
