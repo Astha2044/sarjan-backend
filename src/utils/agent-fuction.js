@@ -15,13 +15,13 @@ async function ideaPipeline(userPrompt, io, roomId, imageParts = [], checkStop, 
     if (isImageRequest) {
         if (userPlan !== 'pro') {
             const restrictionMsg = "image_generation_restricted";
-            if (io && roomId) io.to(roomId).emit('pipeline_step', { 
-                step: 'restriction', 
-                content: "🎨 Image generation is a Pro feature. Please upgrade to unleash your full creativity!" 
+            if (io && roomId) io.to(roomId).emit('pipeline_step', {
+                step: 'restriction',
+                content: "🎨 Image generation is a Pro feature. Please upgrade to unleash your full creativity!"
             });
-            return { 
+            return {
                 finalOutput: "🎨 **Image generation is a Pro feature.** Please upgrade to Pro to generate images with AI.",
-                restricted: true 
+                restricted: true
             };
         }
         console.log("🎨 Image Flow Detected: Switching agents to Visual Mode");
