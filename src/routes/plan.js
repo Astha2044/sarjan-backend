@@ -177,8 +177,8 @@ const generateInvoicePDF = (user, doc) => {
   tx(doc, 'Sarjan AI', B2X + 12, BILL_Y + 28);
 
   doc.font('Helvetica').fontSize(8.5).fillColor(GRAY);
-  tx(doc, 'www.sarjanai.com', B2X + 12, BILL_Y + 44);
-  tx(doc, 'support@sarjanai.com', B2X + 12, BILL_Y + 57);
+  tx(doc, 'www.sarjanai.com', B2X + 12, BILL_Y + 44, { link: 'https://www.sarjanai.com' });
+  tx(doc, 'support@sarjanai.com', B2X + 12, BILL_Y + 57, { link: 'mailto:support@sarjanai.com' });
   tx(doc, 'India', B2X + 12, BILL_Y + 70);
 
   // ── 8. TABLE ─────────────────────────────────────────
@@ -320,25 +320,25 @@ const generateInvoicePDF = (user, doc) => {
   doc.font('Helvetica').fontSize(9).fillColor(TEAL_D);
   const siteText = 'www.sarjanai.com';
   const siteW = doc.widthOfString(siteText);
-  tx(doc, siteText, (PAGE_W - siteW) / 2, FOOT_Y + 10);
+  tx(doc, siteText, (PAGE_W - siteW) / 2, FOOT_Y + 10, { link: 'https://www.sarjanai.com' });
 
   // Footer links — measured and placed precisely, NO continued:true
   doc.font('Helvetica').fontSize(8);
   const footLinks = [
-    { text: 'Terms & Conditions', color: MID },
+    { text: 'Terms & Conditions', color: MID, link: 'https://www.sarjanai.com/terms' },
     { text: '  |  ', color: '#cccccc' },
-    { text: 'Privacy Policy', color: MID },
+    { text: 'Privacy Policy', color: MID, link: 'https://www.sarjanai.com/privacy' },
     { text: '  |  ', color: '#cccccc' },
-    { text: 'Support', color: MID },
+    { text: 'Support', color: MID, link: 'https://www.sarjanai.com/support' },
   ];
   const totalLW = footLinks.reduce((sum, { text }) =>
     sum + doc.widthOfString(text), 0);
   let lx = (PAGE_W - totalLW) / 2;
   const LINK_Y = FOOT_Y + 24;
 
-  footLinks.forEach(({ text, color }) => {
+  footLinks.forEach(({ text, color, link }) => {
     doc.font('Helvetica').fontSize(8).fillColor(color);
-    tx(doc, text, lx, LINK_Y);
+    tx(doc, text, lx, LINK_Y, link ? { link } : {});
     lx += doc.widthOfString(text);
   });
 
