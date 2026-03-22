@@ -139,9 +139,91 @@ const getMessages = asyncHandler(async (req, res) => {
     });
 });
 
+// @desc    Delete a conversation and its messages
+// @route   DELETE /api/chat/:id
+// @access  Private
+const deleteChat = asyncHandler(async (req, res) => {
+    const conversation = await Conversation.findOne({
+        _id: req.params.id,
+        userId: req.user._id
+    });
+
+    if (!conversation) {
+        res.status(404);
+        throw new Error('Conversation not found');
+    }
+
+    // Delete messages associated with the conversation
+    await Message.deleteMany({ conversationId: req.params.id });
+
+    // Delete the conversation itself
+    await conversation.deleteOne();
+
+    res.status(200).json({
+        status: 'success',
+        message: 'Conversation deleted successfully'
+    });
+});
+
+// @desc    Edit a user message, truncate history, and regenerate AI response
+// @route   PUT /api/chat/message/:id
+// @access  Private
+const editMessage = asyncHandler(async (req, res) => {
+    const messageId = req.params.id;
+    const { prompt, conversationId } = req.body;
+
+    if (!prompt || !conversationId) {
+        res.status(400);
+        throw new Error('Prompt and conversationId are required');
+    }
+
+    const conversation = await Conversation.findOne({
+        _id: conversationId,
+        userId: req.user._id
+    });
+
+    if (!conversation) {
+        res.status(404);
+        throw new Error('Conversation not found');
+    }
+
+    const targetMessage = await Message.findOne({
+        _id: messageId,
+        conversationId: conversation._id,
+        role: 'user'
+    });
+
+    if (!targetMessage) {
+        res.status(404);
+        throw new Error('Message not found or not a user message');
+    }
+
+    targetMessage.content = prompt;
+    await targetMessage.save();
+
+    await Message.deleteMany({
+        conversationId: conversation._id,
+        createdAt: { $gt: targetMessage.createdAt }
+    });
+
+    const io = getIO();
+    processAIResponse(conversation._id, prompt, req.user._id, io, []);
+
+    res.status(202).json({
+        status: 'accepted',
+        message: 'Message edited and AI processing restarted',
+        data: {
+            conversationId: conversation._id,
+            userMessage: targetMessage
+        }
+    });
+});
+
 export {
     // createChat,
     sendMessage,
     getHistory,
-    getMessages
+    getMessages,
+    deleteChat,
+    editMessage
 };

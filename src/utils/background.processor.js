@@ -7,22 +7,24 @@ import path from 'path';
 const activeJobs = new Map();
 
 export const stopGeneration = (conversationId) => {
-    if (activeJobs.has(conversationId)) {
-        activeJobs.set(conversationId, false); // Set status to false to indicate stop
-        console.log(`Job for conversation ${conversationId} marked for stopping.`);
+    const idStr = String(conversationId);
+    if (activeJobs.has(idStr)) {
+        activeJobs.set(idStr, false); // Set status to false to indicate stop
+        console.log(`Job for conversation ${idStr} marked for stopping.`);
         return true;
     }
     return false;
 };
 
 export const processAIResponse = async (conversationId, prompt, userId, io, files) => {
-    const roomId = `chat_${conversationId}`;
-    console.log(`Processing AI response for conversation ${conversationId}`);
+    const idStr = String(conversationId);
+    const roomId = `chat_${idStr}`;
+    console.log(`Processing AI response for conversation ${idStr}`);
 
-    activeJobs.set(conversationId, true); // Mark job as active
+    activeJobs.set(idStr, true); // Mark job as active
 
     const checkStop = () => {
-        if (activeJobs.get(conversationId) === false) {
+        if (activeJobs.get(idStr) === false) {
             return true;
         }
         return false;
@@ -94,6 +96,6 @@ export const processAIResponse = async (conversationId, prompt, userId, io, file
             });
         }
     } finally {
-        activeJobs.delete(conversationId);
+        activeJobs.delete(idStr);
     }
 };

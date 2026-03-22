@@ -10,7 +10,7 @@ async function ideaPipeline(userPrompt, io, roomId, imageParts = [], checkStop, 
 
     // 1. Check for Image Generation Intent
     const imageRegex = /(generate|create|make).*(image|picture|photo|art)|draw|imagine|picture of/i;
-    const isImageRequest = imageRegex.test(userPrompt) || imageParts.length > 0;
+    const isImageRequest = imageRegex.test(userPrompt);
 
     let finalOutput;
 

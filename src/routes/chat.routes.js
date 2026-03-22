@@ -1,5 +1,5 @@
 import express from 'express';
-import { sendMessage, getHistory, getMessages } from '../controllers/chat.controller.js';
+import { sendMessage, getHistory, getMessages, deleteChat, editMessage } from '../controllers/chat.controller.js';
 import { protect } from '../middlewares/auth.middleware.js';
 import { chatValidation } from '../middlewares/validation.middleware.js';
 import upload from '../middlewares/upload.middleware.js';
@@ -150,5 +150,64 @@ router.get('/history', protect, getHistory);
  *                       items: { $ref: '#/components/schemas/Message' }
  */
 router.get('/:id', protect, getMessages);
+
+/**
+ * @swagger
+ * /api/chat/{id}:
+ *   delete:
+ *     summary: Delete a specific conversation and its messages
+ *     tags: [Chat]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Conversation deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string }
+ *                 message: { type: string }
+ */
+router.delete('/:id', protect, deleteChat);
+
+/**
+ * @swagger
+ * /api/chat/message/{id}:
+ *   put:
+ *     summary: Edit a user message and regenerate response
+ *     tags: [Chat]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - prompt
+ *               - conversationId
+ *             properties:
+ *               prompt:
+ *                 type: string
+ *               conversationId:
+ *                 type: string
+ *     responses:
+ *       202:
+ *         description: Message updated and regenerating
+ */
+router.put('/message/:id', protect, chatValidation, checkPlanLimit, editMessage);
 
 export default router;

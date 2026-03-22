@@ -33,28 +33,42 @@ const CW = PAGE_W - 2 * MARGIN; // 495.28
 
 // PDFKit Y=0 is top. Draw text at exact (x, y) — NO flow/wrap
 const tx = (doc, text, x, y, opts = {}) => {
-  doc.text(text, x, y, {
+  const str = text != null ? String(text) : '';
+  const sx = isNaN(x) ? 0 : Number(x);
+  const sy = isNaN(y) ? 0 : Number(y);
+
+  const { link, ...printOpts } = opts;
+  doc.text(str, sx, sy, {
     lineBreak: false,
-    ...opts,
+    ...printOpts,
   });
+
+  if (link) {
+    const w = doc.widthOfString(str) || 0;
+    const h = doc.currentLineHeight() || 10;
+    doc.link(sx, sy, w, h, link);
+  }
 };
 
 // Right-align text ending at x=rx
 const txR = (doc, text, rx, y) => {
-  const w = doc.widthOfString(text);
-  tx(doc, text, rx - w, y);
+  const str = text != null ? String(text) : '';
+  const w = doc.widthOfString(str) || 0;
+  tx(doc, str, (isNaN(rx) ? 0 : Number(rx)) - w, y);
 };
 
 // Center text within a box starting at x, width w
 const txC = (doc, text, x, w, y) => {
-  const tw = doc.widthOfString(text);
-  tx(doc, text, x + (w - tw) / 2, y);
+  const str = text != null ? String(text) : '';
+  const tw = doc.widthOfString(str) || 0;
+  tx(doc, str, (isNaN(x) ? 0 : Number(x)) + ((isNaN(w) ? 0 : Number(w)) - tw) / 2, y);
 };
 
 // Horizontal rule
 const hr = (doc, y, color = LGRAY, lw = 0.5) => {
-  doc.moveTo(MARGIN, y).lineTo(PAGE_W - MARGIN, y)
-    .lineWidth(lw).strokeColor(color).stroke();
+  const sy = isNaN(y) ? 0 : Number(y);
+  doc.moveTo(MARGIN, sy).lineTo(PAGE_W - MARGIN, sy)
+    .lineWidth(isNaN(lw) ? 0.5 : Number(lw)).strokeColor(color).stroke();
 };
 
 // ─────────────────────────────────────────────────────────
@@ -316,20 +330,22 @@ const generateInvoicePDF = (user, doc) => {
   const FOOT_Y = FEAT_Y + FEAT_H + 14;
   hr(doc, FOOT_Y, LGRAY, 0.5);
 
+  const BASE_URL = process.env.CLIENT_URL || 'http://localhost:3000';
+
   // Website — centered
   doc.font('Helvetica').fontSize(9).fillColor(TEAL_D);
   const siteText = 'www.sarjanai.com';
   const siteW = doc.widthOfString(siteText);
-  tx(doc, siteText, (PAGE_W - siteW) / 2, FOOT_Y + 10, { link: 'https://www.sarjanai.com' });
+  tx(doc, siteText, (PAGE_W - siteW) / 2, FOOT_Y + 10, { link: BASE_URL });
 
   // Footer links — measured and placed precisely, NO continued:true
   doc.font('Helvetica').fontSize(8);
   const footLinks = [
-    { text: 'Terms & Conditions', color: MID, link: 'https://www.sarjanai.com/terms' },
+    { text: 'Terms & Conditions', color: MID, link: `${BASE_URL}/terms` },
     { text: '  |  ', color: '#cccccc' },
-    { text: 'Privacy Policy', color: MID, link: 'https://www.sarjanai.com/privacy' },
+    { text: 'Privacy Policy', color: MID, link: `${BASE_URL}/privacy` },
     { text: '  |  ', color: '#cccccc' },
-    { text: 'Support', color: MID, link: 'https://www.sarjanai.com/support' },
+    { text: 'Support', color: MID, link: `${BASE_URL}/contact` },
   ];
   const totalLW = footLinks.reduce((sum, { text }) =>
     sum + doc.widthOfString(text), 0);
@@ -343,7 +359,7 @@ const generateInvoicePDF = (user, doc) => {
   });
 
   // Tagline
-  doc.font('Helvetica').fontSize(7.5).fillColor('#cccccc');
+  doc.font('Helvetica').fontSize(7.5).fillColor('#0f0e0e');
   const tagText = 'SARJAN AI  \u00b7  Intelligent Design Systems  \u00b7  India';
   const tagW = doc.widthOfString(tagText);
   tx(doc, tagText, (PAGE_W - tagW) / 2, FOOT_Y + 38);
@@ -438,7 +454,11 @@ router.get("/invoice", protect, async (req, res) => {
     doc.end();
   } catch (err) {
     console.error("Invoice generation failed:", err);
-    res.status(500).json({ error: "Failed to generate invoice" });
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to generate invoice" });
+    } else {
+      res.end(); // close the failed stream gracefully
+    }
   }
 });
 
