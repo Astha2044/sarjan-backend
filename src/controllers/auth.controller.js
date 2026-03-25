@@ -166,10 +166,23 @@ const forgotPassword = asyncHandler(async (req, res) => {
     await user.save({ validateBeforeSave: false });
 
     // Create reset url
-    const frontendUrl = process.env.FRONTEND_URL;
+    let frontendUrl = process.env.FRONTEND_URL;
+    
+    // If FRONTEND_URL is undefined or localhost, use the request origin as a fallback
+    if (!frontendUrl || frontendUrl.includes('localhost')) {
+        const origin = req.get('origin') || req.get('referer');
+        if (origin && !origin.includes('localhost')) {
+            // Remove trailing slash if present
+            frontendUrl = origin.replace(/\/$/, "");
+        }
+    }
+
+    // Final fallback if everything else fails
+    if (!frontendUrl) frontendUrl = 'http://localhost:3000';
+
     const resetUrl = `${frontendUrl}/auth/reset-password/${resetToken}`;
 
-    console.log(`[ForgotPassword] FRONTEND_URL: ${frontendUrl}`);
+    console.log(`[ForgotPassword] Final FRONTEND_URL used: ${frontendUrl}`);
     console.log(`[ForgotPassword] Generated Reset URL: ${resetUrl}`);
     console.log(`[ForgotPassword] Request Origin: ${req.get('origin')}`);
     console.log(`[ForgotPassword] Request Referer: ${req.get('referer')}`);
