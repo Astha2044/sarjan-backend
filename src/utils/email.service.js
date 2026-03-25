@@ -5,18 +5,12 @@ dotenv.config();
 const sendEmail = async (options) => {
 
     // 1) Create a transporter
-    const port = parseInt(process.env.SMTP_PORT) || 587;
+    // Using 'service: gmail' is the most reliable way for Gmail accounts on Render
     const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: port,
-        secure: port === 465, // true for 465, false for other ports
+        service: 'gmail',
         auth: {
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASSWORD,
-        },
-        // For Gmail/ STARTTLS issues on some hosts
-        tls: {
-            rejectUnauthorized: false
         }
     });
 
