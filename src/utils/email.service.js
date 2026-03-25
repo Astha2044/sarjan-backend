@@ -7,11 +7,16 @@ const sendEmail = async (options) => {
     // 1) Create a transporter
     // Using 'service: gmail' is the most reliable way for Gmail accounts on Render
     const transporter = nodemailer.createTransport({
-        service: 'gmail',
+
+        host: process.env.SMTP_HOST,
+        port: process.env.SMTP_PORT,
+        secure: false, // IMPORTANT
         auth: {
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASSWORD,
-        }
+        },
+        connectionTimeout: 10000, // increase timeout
+
     });
 
     // 2) Define the email options
