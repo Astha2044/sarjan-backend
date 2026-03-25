@@ -138,7 +138,10 @@ const verifyToken = (req, res) => {
 // @access  Public
 const forgotPassword = asyncHandler(async (req, res) => {
     const { email } = req.body;
-    console.log(`ForgotPassword Request for email: ${email}`);
+    console.log(`[ForgotPassword] Request at ${new Date().toISOString()}`);
+    console.log(`[ForgotPassword] Body:`, req.body);
+    console.log(`[ForgotPassword] Headers:`, req.headers);
+    console.log(`[ForgotPassword] email: ${email}`);
 
     const user = await User.findOne({ email });
 
