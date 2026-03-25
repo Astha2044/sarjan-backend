@@ -137,9 +137,13 @@ const verifyToken = (req, res) => {
 // @route   POST /api/auth/forgot-password
 // @access  Public
 const forgotPassword = asyncHandler(async (req, res) => {
-    const user = await User.findOne({ email: req.body.email });
+    const { email } = req.body;
+    console.log(`ForgotPassword Request for email: ${email}`);
+
+    const user = await User.findOne({ email });
 
     if (!user) {
+        console.warn(`ForgotPassword User not found for email: ${email}`);
         res.status(404);
         throw new Error('There is no user with that email');
     }
@@ -159,9 +163,15 @@ const forgotPassword = asyncHandler(async (req, res) => {
     await user.save({ validateBeforeSave: false });
 
     // Create reset url
-    const resetUrl = `${process.env.FRONTEND_URL}/auth/reset-password/${resetToken}`;
+    const frontendUrl = process.env.FRONTEND_URL;
+    const resetUrl = `${frontendUrl}/auth/reset-password/${resetToken}`;
 
-    const message = `You are receiving this email because you (or someone else) has requested the reset of a password. Please make a PUT request to: \n\n ${resetUrl}`;
+    console.log(`[ForgotPassword] FRONTEND_URL: ${frontendUrl}`);
+    console.log(`[ForgotPassword] Generated Reset URL: ${resetUrl}`);
+    console.log(`[ForgotPassword] Request Origin: ${req.get('origin')}`);
+    console.log(`[ForgotPassword] Request Referer: ${req.get('referer')}`);
+
+    const message = `You are receiving this email because you (or someone else) has requested the reset of a password. Please go to this link to reset your password: \n\n ${resetUrl}`;
 
     try {
         await sendEmail({
@@ -180,13 +190,20 @@ const forgotPassword = asyncHandler(async (req, res) => {
             message: 'Email sent',
         });
     } catch (err) {
+        console.error('[ForgotPassword] EMAIL ERROR:', err);
+        console.error('[ForgotPassword] SMTP CONFIG:', {
+            host: process.env.SMTP_HOST,
+            port: process.env.SMTP_PORT,
+            user: process.env.SMTP_USER
+        });
+
         user.resetPasswordToken = undefined;
         user.resetPasswordExpire = undefined;
 
         await user.save({ validateBeforeSave: false });
 
         res.status(500);
-        throw new Error('Email could not be sent');
+        throw new Error(`Email could not be sent: ${err.message}`);
     }
 });
 
