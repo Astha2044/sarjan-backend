@@ -6,24 +6,31 @@ const sendEmail = async (options) => {
 
     // 1) Create a transporter
     // Using 'service' is often more reliable than manual host/port for known providers
+    const smtpHost = (process.env.SMTP_HOST || '').trim();
+    const smtpPort = (process.env.SMTP_PORT || '').trim();
+    const smtpUser = (process.env.SMTP_USER || '').trim();
+    const smtpPass = (process.env.SMTP_PASSWORD || '').trim();
+
+    console.log(`[sendEmail] Raw SMTP Config - Host: "${smtpHost}", Port: "${smtpPort}", User: "${smtpUser}"`);
+
     const transportConfig = {
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT),
-        secure: process.env.SMTP_PORT == 465, // Use secure if port is 465
+        host: smtpHost,
+        port: parseInt(smtpPort),
+        secure: smtpPort === '465', // Use secure if port is 465
         auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASSWORD,
+            user: smtpUser,
+            pass: smtpPass,
         },
-        connectionTimeout: 20000, // Increase to 20 seconds
-        greetingTimeout: 20000,   // Increase to 20 seconds
-        socketTimeout: 30000,     // Increase to 30 seconds
+        connectionTimeout: 20000, // 20 seconds
+        greetingTimeout: 20000,   // 20 seconds
+        socketTimeout: 30000,     // 30 seconds
     };
 
-    // Use service: 'gmail' if host is gmail
-    if (process.env.SMTP_HOST && process.env.SMTP_HOST.includes('gmail')) {
-        console.log('[sendEmail] Detected Gmail host, using service: gmail');
+    // Use service: 'gmail' if host contains gmail
+    if (smtpHost.toLowerCase().includes('gmail')) {
+        console.log('[sendEmail] Gmail detected, forcing optimized Gmail settings');
         transportConfig.service = 'gmail';
-        // When using service: 'gmail', nodemailer handles host/port/secure
+        // When using service: 'gmail', nodemailer handles host/port/secure perfectly
         delete transportConfig.host;
         delete transportConfig.port;
         delete transportConfig.secure;
