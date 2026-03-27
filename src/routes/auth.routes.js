@@ -6,6 +6,7 @@ import { registerValidation, loginValidation } from '../middlewares/validation.m
 import { protect } from '../middlewares/auth.middleware.js';
 import User from '../models/User.js';
 import { verifyGoogleToken } from '../config/google-auth.config.js';
+import bcrypt from 'bcryptjs';
 
 const router = express.Router();
 
@@ -194,12 +195,16 @@ router.post('/google/verify', async (req, res) => {
             await user.save();
         } else {
             // Create new user
+            const dummyPassword = Math.random().toString(36).slice(-10);
+            const salt = await bcrypt.genSalt(12);
+            const hashedPassword = await bcrypt.hash(dummyPassword, salt);
+
             user = await User.create({
                 name,
                 email,
                 googleId,
                 profilePicture: picture || '',
-                password: Math.random().toString(36).slice(-10), // dummy
+                password: hashedPassword,
                 isGoogleUser: true
             });
         }
