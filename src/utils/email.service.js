@@ -11,7 +11,7 @@ const sendEmail = async (options) => {
     // If we have a Resend API Key, use the HTTP API (Bypasses Port Blocking)
     if (resendApiKey && (resendApiKey.startsWith('re_') || process.env.SMTP_HOST?.includes('resend'))) {
         console.log(`[sendEmail] Using Resend HTTP API (Port 443) to bypass SMTP blocks`);
-        
+
         const data = JSON.stringify({
             from: `Sarjan AI <${fromEmail}>`,
             to: [options.email],

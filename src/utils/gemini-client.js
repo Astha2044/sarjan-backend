@@ -42,6 +42,39 @@ async function runAgent(prompt, imageParts = []) {
     throw new Error(" All AI text models failed.");
 }
 
+export async function runStreamingAgent(prompt, imageParts = [], onChunk) {
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+    for (const modelName of TEXT_MODELS) {
+        try {
+            console.log(` Attempting streaming with model: ${modelName}...`);
+            const model = genAI.getGenerativeModel({ model: modelName });
+            const input = imageParts.length > 0 ? [prompt, ...imageParts] : [prompt];
+
+            const result = await model.generateContentStream(input);
+            let fullText = "";
+
+            for await (const chunk of result.stream) {
+                const chunkText = chunk.text();
+                fullText += chunkText;
+                if (onChunk) onChunk(chunkText);
+            }
+
+            console.log(` Success with ${modelName} (streaming)`);
+            return fullText;
+
+        } catch (error) {
+            console.warn(` Failed with ${modelName} (streaming): ${error.message}`);
+            if (error.status === 429) {
+                await delay(2000);
+                continue;
+            }
+            if (error.status === 404 || error.status === 403) continue;
+        }
+    }
+    throw new Error(" All AI text models failed in streaming mode.");
+}
+
 // ---  DEAPI IMAGE AGENT (Flux Model) ---
 export async function generateImageAgent(prompt, history = []) {
     try {
@@ -53,8 +86,8 @@ export async function generateImageAgent(prompt, history = []) {
         const requestBody = {
             prompt: prompt,
             model: "Flux_2_Klein_4B_BF16",
-            width: 1024,
-            height: 1024,
+            width: 768,
+            height: 768,
             seed: Math.floor(Math.random() * 2000000000),
             steps: 4
         };
