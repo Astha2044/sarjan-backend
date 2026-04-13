@@ -2,8 +2,8 @@ import User from "../models/User.js";
 
 export const checkPlanLimit = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.id);
-    if (user.plan === "free" && user.messageCount >= 10) {
+    const user = await User.findById(req.user.id || req.user._id);
+    if (user.plan === "free" && user.messageCount >= 1000) {
       return res.status(403).json({
         error: "limit_reached",
         message: "Free plan limit reached. Upgrade to Pro.",

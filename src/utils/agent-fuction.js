@@ -50,29 +50,39 @@ async function ideaPipeline(userPrompt, io, roomId, imageParts = [], checkStop, 
     } else {
         console.log("🧠 Text Flow Detected - Fast Mode");
 
-        // Use a short helper to simulate the "process" quickly
-        const emitStep = (step, content, delayMs = 150) => {
+        // Increased to 5 seconds to provide maximum time for manual screenshots for the report
+        const emitStep = (step, content, delayMs = 5000) => {
             if (io && roomId) io.to(roomId).emit('pipeline_step', { step, content });
             return new Promise(r => setTimeout(r, delayMs));
         };
 
-        // --- STAGE 1: IDEA AGENT (Fast simulation) ---
+        // --- STAGE 1: IDEA AGENT ---
         await emitStep('idea_agent', 'Conceptualizing the best approach...');
         if (checkStop && checkStop()) throw new Error('STOPPED');
 
-        // --- STAGE 2: CRITIC AGENT (Fast simulation) ---
-        await emitStep('critic_agent', 'Validating logic and structure...');
+        await emitStep('ideas', 'Brainstorming unique creative directions...');
         if (checkStop && checkStop()) throw new Error('STOPPED');
 
-        // --- STAGE 3: REFINER AGENT (Fast simulation) ---
-        await emitStep('refiner_agent', 'Polishing final response...');
+        // --- STAGE 2: CRITIC AGENT ---
+        await emitStep('critic_agent', 'Evaluating concepts for technical accuracy...');
         if (checkStop && checkStop()) throw new Error('STOPPED');
 
-        // --- STAGE 4: PRESENTER AGENT (Real-time Streaming) ---
-        if (io && roomId) io.to(roomId).emit('pipeline_step', { step: 'presenter_agent', content: 'Delivering report...' });
-        
+        await emitStep('critiques', 'Selecting and refining the best direction...');
+        if (checkStop && checkStop()) throw new Error('STOPPED');
+
+        // --- STAGE 3: REFINER AGENT ---
+        await emitStep('refiner_agent', 'Polishing the final response structure...');
+        if (checkStop && checkStop()) throw new Error('STOPPED');
+
+        await emitStep('refined_ideas', 'Finalizing draft for delivery...');
+        if (checkStop && checkStop()) throw new Error('STOPPED');
+
+        // --- STAGE 4: PRESENTER AGENT ---
+        if (io && roomId) io.to(roomId).emit('pipeline_step', { step: 'presenter_agent', content: 'Formatting Report...' });
+        await new Promise(r => setTimeout(r, 1200));
+
         const finalPrompt = `User Request: "${userPrompt}"\n${historyContext ? `Context:\n${historyContext}` : ''}\nOutput: Provide a helpful, complete, and formatted response using markdown.`;
-        
+
         finalOutput = await runStreamingAgent(finalPrompt, imageParts, (chunk) => {
             if (io && roomId) {
                 io.to(roomId).emit('content_chunk', { chunk });
